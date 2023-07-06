@@ -16,6 +16,12 @@ class OpenAIErrorException(Exception):
         self.openai_error = openai_error
 
 
+class MaxConsecutiveFunctionCallsExceeded(Exception):
+    def __init__(self, max_consecutive_calls):
+        message = f"Max consecutive function calls exceeded: {max_consecutive_calls}"
+        super().__init__(message)
+
+
 class UnexpectedFunctionCall(Exception):
     def __init__(self, func_name):
         message = f"Unexpected function call: {func_name}"

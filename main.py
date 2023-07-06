@@ -1,32 +1,44 @@
-from core import JAImsAgent, JAImsFuncWrapper, JAImsParamDescriptor, JsonSchemaType
+from core import (
+    JAImsAgent,
+    JAImsFuncWrapper,
+    JAImsParamDescriptor,
+    JAImsJsonSchemaType,
+    GPTModel,
+)
 
 
 def sum(a: int, b: int):
+    print("----performing sum----")
+    print(a, b)
+    print("----------------------")
     return a + b
 
 
 def main():
-    stream = True
+    stream = False
 
     func_wrapper = JAImsFuncWrapper(
         function=sum,
         name="sum",
-        description="use it when the user wants you to sum two numbers",
+        description="use this function when the user wants to sum two numbers",
         params_descriptors=[
             JAImsParamDescriptor(
                 name="a",
-                description="the first number to be summed",
-                json_type=JsonSchemaType.NUMBER,
+                description="first operand",
+                json_type=JAImsJsonSchemaType.NUMBER,
             ),
             JAImsParamDescriptor(
                 name="b",
-                description="the second number to be summed",
-                json_type=JsonSchemaType.NUMBER,
+                description="second operand",
+                json_type=JAImsJsonSchemaType.NUMBER,
             ),
         ],
     )
 
-    agent = JAImsAgent(functions=[func_wrapper])
+    agent = JAImsAgent(
+        functions=[func_wrapper],
+        model=GPTModel.GPT_3_5_TURBO_16K,
+    )
 
     print("Hello, I am JAIms, your personal assistant.")
     print("How can I help you today?")
@@ -35,7 +47,8 @@ def main():
         if user_input == "exit":
             break
         response = agent.send_messages(
-            [{"role": "user", "content": user_input}], stream=stream
+            [{"role": "user", "content": user_input}],
+            stream=stream,
         )
 
         if response:

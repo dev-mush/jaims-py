@@ -1,9 +1,12 @@
 from enum import Enum
-from typing import Any, List, Dict, Optional, Callable, Union
+import json
+from typing import Any, List, Dict, Optional, Callable
+
+from core.exceptions import UnexpectedFunctionCall
 
 
 # Enum class over all Json Types
-class JsonSchemaType(Enum):
+class JAImsJsonSchemaType(Enum):
     STRING = "string"
     NUMBER = "number"
     OBJECT = "object"
@@ -40,7 +43,7 @@ class JAImsParamDescriptor:
         self,
         name: str,
         description: str,
-        json_type: JsonSchemaType,
+        json_type: JAImsJsonSchemaType,
         attributes_params_descriptors: Optional[List["JAImsParamDescriptor"]] = None,
         array_type_descriptor: Optional["JAImsParamDescriptor"] = None,
         enum_values: Optional[List[Any]] = None,
@@ -64,7 +67,7 @@ class JAImsParamDescriptor:
         }
 
         if (
-            self.json_type == JsonSchemaType.OBJECT
+            self.json_type == JAImsJsonSchemaType.OBJECT
             and self.attributes_params_descriptors
         ):
             schema["properties"] = {}
@@ -74,7 +77,7 @@ class JAImsParamDescriptor:
                 if param.required:
                     schema["required"].append(param.name)
 
-        if self.json_type == JsonSchemaType.ARRAY and self.array_type_descriptor:
+        if self.json_type == JAImsJsonSchemaType.ARRAY and self.array_type_descriptor:
             schema["items"] = {"type": self.array_type_descriptor.json_type.value}
 
         if self.enum_values:
@@ -147,3 +150,84 @@ class JAImsFuncWrapper:
                 schema["required"].append(param.name)
 
         return schema
+
+
+class JAImsFunctionHandler:
+    """
+    Handles the functions to be used in the OPENAI API.
+    Holds a list of JAImsFuncWrapper instances.
+
+    Attributes
+    ----------
+        functions : List[JAImsFuncWrapper]
+            the list of functions to be called
+    """
+
+    def __init__(self, functions: List[JAImsFuncWrapper] = []):
+        self.functions = functions
+
+    def handle_from_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Handles a function_call message, calling the appropriate function.
+
+        Parameters
+        ----------
+            message : dict
+                the message from the agent
+
+        Returns
+        -------
+            dict
+                the function result message to be sent to openai
+
+        Raises
+        ------
+            UnexpectedFunctionCallException
+                if the function name is not found in the functions list
+        """
+        function_name = message["function_call"]["name"]
+        function_args = message["function_call"]["arguments"]
+
+        dict_args = json.loads(function_args)
+
+        # invoke function
+        call_result = self.__call_function(function_name, **dict_args)
+
+        # build function result message, call new send recursively
+        function_result_message = {
+            "content": str(call_result),
+            "name": function_name,
+            "role": "function",
+        }
+
+        return function_result_message
+
+    def __call_function(self, function_name, *args, **kwargs):
+        # Check if function_name exists in functions, if not, raise UnexpectedFunctionCallException
+        function_wrapper = next(
+            (f for f in self.functions if f.name == function_name), None
+        )
+        if not function_wrapper:
+            raise UnexpectedFunctionCall(function_name)
+
+        # If the name of the current function matches the provided name
+        # Call the function and return its result
+        return function_wrapper.function(*args, **kwargs)
+
+
+def parse_functions_to_json(functions: List[JAImsFuncWrapper]) -> List[Dict[str, Any]]:
+    openai_functions = []
+    for function in functions:
+        function_data = {
+            k: v
+            for k, v in {
+                "name": function.name,
+                "description": function.description,
+                "parameters": function.get_jsonapi_schema(),
+            }.items()
+            if v is not None
+        }
+
+        openai_functions.append(function_data)
+
+    return openai_functions

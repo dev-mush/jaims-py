@@ -1,7 +1,7 @@
 from enum import Enum
 
 DEFAULT_MAX_TOKENS = 512
-MAX_SUBSEQUENT_CALLS = 5
+MAX_CONSECUTIVE_CALLS = 5
 
 
 class GPTModel(Enum):

@@ -1,10 +1,11 @@
-from enum import Enum
 from typing import List, Optional
 from core.constants import DEFAULT_MAX_TOKENS, GPTModel
 
 from core.exceptions import TokensLimitExceeded
 import tiktoken
 import json
+
+from core.function_handler import JAImsFuncWrapper, parse_functions_to_json
 
 
 class HistoryManager:
@@ -13,11 +14,12 @@ class HistoryManager:
 
     Attributes
     ----------
-        __history : list
-          holds the current openai messages history. It's meant to be
-          manipulated only by the methods of this class.
         model : GPTModel
             the model to be used by the agent, defaults to gpt-3.5-turbo-0613
+        functions : list (optional)
+            the list of functions that can be called by the agent, used to compute token usage
+        initial_prompts: list (optional)
+            the list of initial prompts to be used by the agent, useful to compute token usage
 
     Methods
     -------
@@ -29,11 +31,27 @@ class HistoryManager:
             clears the history
         optimize_history()
             optimizes history messages based on context constraints
+
+    Private Members
+    ----------------
+        __history : list
+            holds the current openai messages history. It's meant to be
+            manipulated only by the methods of this class.
     """
 
-    def __init__(self, history: List = [], model: GPTModel = GPTModel.GPT_3_5_TURBO):
+    def __init__(
+        self,
+        history: List = [],
+        model: GPTModel = GPTModel.GPT_3_5_TURBO,
+        mandatory_context: Optional[List] = None,
+        functions: Optional[List[JAImsFuncWrapper]] = None,
+        optimize_history: bool = True,
+    ):
         self.__history = history
         self.model = model
+        self.mandatory_context = mandatory_context or []
+        self.json_functions = parse_functions_to_json(functions or [])
+        self.optimize_history = optimize_history
 
     def add_messages(self, messages: List):
         """
@@ -48,29 +66,25 @@ class HistoryManager:
 
     def build_messages_from_history(
         self,
-        mandatory_context: Optional[List] = None,
-        functions: Optional[List] = None,
         agent_max_tokens: int = DEFAULT_MAX_TOKENS,
-        optimize: bool = False,
     ) -> List:
         """
         Returns the history.
 
         Parameters
         ----------
-            mandatory_context : list (optional)
-                The list of mandatory context messages to be prepended to the message history.
-                Useful to inject some system messages that shape the personality or the scope of the agent.
-            functions : list (optional)
-                The list of functions to be appended to the message history, pass it when needed to calculate tokens and optimize the request.
-            optimize : bool (optional)
-                Whether to optimize the history or not, defaults to False.
-                When set to True, the history will be optimized based on context limits for the current model.
+            agent_max_tokens : int (optional)
+                the max tokens to leave out for the response from openai, defaults to DEFAULT_MAX_TOKENS
 
         Returns
         -------
             list
-                the history
+                the history of messages to be sent to openai
+
+        Raises
+        ------
+            TokensLimitExceeded
+                if the max tokens to be used exceed the max tokens supported by the current llm model
 
         Developer Notes
         ---------------
@@ -109,16 +123,14 @@ class HistoryManager:
 
         """
 
-        # Assigning empty lists to mandatory_context and functions if they are None
-        mandatory_context = mandatory_context or []
-        functions = functions or []
-
         # Copying the whole history to avoid altering the original one
         history_buffer = self.__history.copy()
 
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens
-        compound_history = mandatory_context + history_buffer + functions
+        compound_history = (
+            self.mandatory_context + history_buffer + (self.json_functions)
+        )
 
         # the max tokens to be used are the max tokens supported by the current
         # openai model minus the tokens to leave out for the response from openai
@@ -127,7 +139,7 @@ class HistoryManager:
         # calculate the tokens for the compound history
         messages_tokens = self.__tokens_from_messages(compound_history)
 
-        if optimize:
+        if self.optimize_history:
             while messages_tokens > context_max_tokens:
                 if not history_buffer:
                     raise TokensLimitExceeded(
@@ -142,7 +154,7 @@ class HistoryManager:
 
                 # Recalculating the tokens for the compound history
                 messages_tokens = self.__tokens_from_messages(
-                    mandatory_context + history_buffer + functions
+                    self.mandatory_context + history_buffer + self.json_functions
                 )
         elif messages_tokens > context_max_tokens:
             raise TokensLimitExceeded(
@@ -152,7 +164,7 @@ class HistoryManager:
                 has_optimized=False,
             )
 
-        return mandatory_context + history_buffer
+        return self.mandatory_context + history_buffer
 
     def clear_history(self):
         """
