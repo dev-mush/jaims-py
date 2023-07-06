@@ -1,7 +1,7 @@
 from typing import List, Optional
-from core.constants import DEFAULT_MAX_TOKENS, GPTModel
+from core.constants import DEFAULT_MAX_TOKENS, JAImsGPTModel
 
-from core.exceptions import TokensLimitExceeded
+from core.exceptions import JAImsTokensLimitExceeded
 import tiktoken
 import json
 
@@ -42,7 +42,7 @@ class HistoryManager:
     def __init__(
         self,
         history: List = [],
-        model: GPTModel = GPTModel.GPT_3_5_TURBO,
+        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
         mandatory_context: Optional[List] = None,
         functions: Optional[List[JAImsFuncWrapper]] = None,
         optimize_history: bool = True,
@@ -142,7 +142,7 @@ class HistoryManager:
         if self.optimize_history:
             while messages_tokens > context_max_tokens:
                 if not history_buffer:
-                    raise TokensLimitExceeded(
+                    raise JAImsTokensLimitExceeded(
                         self.model.max_tokens,
                         messages_tokens,
                         agent_max_tokens,
@@ -157,7 +157,7 @@ class HistoryManager:
                     self.mandatory_context + history_buffer + self.json_functions
                 )
         elif messages_tokens > context_max_tokens:
-            raise TokensLimitExceeded(
+            raise JAImsTokensLimitExceeded(
                 self.model.max_tokens,
                 messages_tokens,
                 agent_max_tokens,

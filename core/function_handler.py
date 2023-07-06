@@ -2,7 +2,7 @@ from enum import Enum
 import json
 from typing import Any, List, Dict, Optional, Callable
 
-from core.exceptions import UnexpectedFunctionCall
+from core.exceptions import JAImsUnexpectedFunctionCall
 
 
 # Enum class over all Json Types
@@ -208,7 +208,7 @@ class JAImsFunctionHandler:
             (f for f in self.functions if f.name == function_name), None
         )
         if not function_wrapper:
-            raise UnexpectedFunctionCall(function_name)
+            raise JAImsUnexpectedFunctionCall(function_name)
 
         # If the name of the current function matches the provided name
         # Call the function and return its result

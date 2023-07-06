@@ -4,7 +4,7 @@ DEFAULT_MAX_TOKENS = 512
 MAX_CONSECUTIVE_CALLS = 5
 
 
-class GPTModel(Enum):
+class JAImsGPTModel(Enum):
     """
     The OPENAI GPT models available.
     Only those that support functions are listed, so just:

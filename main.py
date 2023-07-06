@@ -3,7 +3,7 @@ from core import (
     JAImsFuncWrapper,
     JAImsParamDescriptor,
     JAImsJsonSchemaType,
-    GPTModel,
+    JAImsGPTModel,
 )
 
 
@@ -37,7 +37,7 @@ def main():
 
     agent = JAImsAgent(
         functions=[func_wrapper],
-        model=GPTModel.GPT_3_5_TURBO_16K,
+        model=JAImsGPTModel.GPT_3_5_TURBO_16K,
     )
 
     print("Hello, I am JAIms, your personal assistant.")

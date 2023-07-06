@@ -3,11 +3,11 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 import openai
 
-from core.constants import DEFAULT_MAX_TOKENS, MAX_CONSECUTIVE_CALLS, GPTModel
+from core.constants import DEFAULT_MAX_TOKENS, MAX_CONSECUTIVE_CALLS, JAImsGPTModel
 from core.exceptions import (
-    MissingOpenaiAPIKeyException,
-    OpenAIErrorException,
-    MaxConsecutiveFunctionCallsExceeded,
+    JAImsMissingOpenaiAPIKeyException,
+    JAImsOpenAIErrorException,
+    JAImsMaxConsecutiveFunctionCallsExceeded,
 )
 from core.function_handler import (
     JAImsFuncWrapper,
@@ -64,7 +64,7 @@ class JAImsAgent:
 
     def __init__(
         self,
-        model=GPTModel.GPT_3_5_TURBO,
+        model=JAImsGPTModel.GPT_3_5_TURBO,
         functions: List[JAImsFuncWrapper] = [],
         initial_prompts: Optional[List[Dict]] = [],
         openai_api_key: Optional[str] = None,
@@ -72,7 +72,7 @@ class JAImsAgent:
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
-            raise MissingOpenaiAPIKeyException()
+            raise JAImsMissingOpenaiAPIKeyException()
         openai.api_key = openai_api_key
 
         self.model = model
@@ -138,7 +138,7 @@ class JAImsAgent:
     ) -> Union[str, Generator[str, None, None]]:
         call_context.iterations += 1
         if call_context.iterations > self.max_consecutive_calls:
-            raise MaxConsecutiveFunctionCallsExceeded(
+            raise JAImsMaxConsecutiveFunctionCallsExceeded(
                 f"Max consecutive function calls exceeded ({self.max_consecutive_calls})"
             )
 
@@ -156,7 +156,7 @@ class JAImsAgent:
             else:
                 return self.__process_openai_response(response, call_context)
         except openai.OpenAIError as e:
-            raise OpenAIErrorException(
+            raise JAImsOpenAIErrorException(
                 f"Failed to communicate with the OpenAI API: {str(e)}", e
             ) from e
         except Exception as e:
