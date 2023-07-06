@@ -1,3 +1,6 @@
+
+![jaims_logo](https://github.com/dev-mush/jaims/assets/669003/ac429608-6c49-4e41-a361-50da9569bfec)
+
 # jAIms 
 
 _My name is Bot, jAIMs Bot._ 🕶️
