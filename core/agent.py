@@ -114,6 +114,8 @@ class JAImsAgent:
                 the response object
         """
 
+        self.__history_manager.add_messages(messages)
+
         kwargs = {
             "model": self.model.string,
             "temperature": temperature,
@@ -129,18 +131,16 @@ class JAImsAgent:
 
         call_context = OpenaiCallContext(kwargs)
 
-        return self.__call_openai(messages, call_context)
+        return self.__call_openai(call_context)
 
     def __call_openai(
-        self, messages: List, call_context: OpenaiCallContext
+        self, call_context: OpenaiCallContext
     ) -> Union[str, Generator[str, None, None]]:
         call_context.iterations += 1
         if call_context.iterations > self.max_consecutive_calls:
             raise MaxConsecutiveFunctionCallsExceeded(
                 f"Max consecutive function calls exceeded ({self.max_consecutive_calls})"
             )
-
-        self.__history_manager.add_messages(messages)
 
         optimized_messages = self.__history_manager.build_messages_from_history(
             agent_max_tokens=call_context.call_kwargs["max_tokens"],
@@ -152,9 +152,9 @@ class JAImsAgent:
             response: Any = openai.ChatCompletion.create(**call_context.call_kwargs)
 
             if call_context.call_kwargs["stream"]:
-                return self.__answer_with_stream(response, call_context)
+                return self.__process_openai_stream_response(response, call_context)
             else:
-                return self.__answer_no_stream(response, call_context)
+                return self.__process_openai_response(response, call_context)
         except openai.OpenAIError as e:
             raise OpenAIErrorException(
                 f"Failed to communicate with the OpenAI API: {str(e)}", e
@@ -162,7 +162,7 @@ class JAImsAgent:
         except Exception as e:
             raise Exception(f"An unexpected error occurred: {str(e)}") from e
 
-    def __answer_with_stream(
+    def __process_openai_stream_response(
         self, response: Any, call_context: OpenaiCallContext
     ) -> Generator[str, None, None]:
         message = {}
@@ -173,28 +173,29 @@ class JAImsAgent:
                 message = JAImsAgent.__merge_message_deltas(message, message_delta)
 
                 if response_delta["choices"][0]["finish_reason"] is not None:
-                    self.__history_manager.add_messages([message])
-                    if "function_call" in message:
-                        result_message = self.__function_handler.handle_from_message(
-                            message=message
-                        )
-                        yield from self.__call_openai([result_message], call_context)
+                    yield from self.__handle_response(message, call_context)
 
                 if "content" in message_delta and message_delta["content"] is not None:
                     yield response_delta["choices"][0]["delta"]["content"]
 
-    def __answer_no_stream(self, response: Any, call_context: OpenaiCallContext):
+    def __process_openai_response(self, response: Any, call_context: OpenaiCallContext):
         if len(response["choices"]) == 0:
             return ""
         message = response["choices"][0]["message"]
+        return self.__handle_response(message, call_context)
+
+    def __handle_response(self, message, call_context):
         self.__history_manager.add_messages([message])
 
-        # evaluate method contains function call
         if "function_call" in message:
             result_message = self.__function_handler.handle_from_message(
                 message=message
             )
-            return self.__call_openai([result_message], call_context)
+            self.__history_manager.add_messages([result_message])
+            return self.__call_openai(call_context)
+
+        if call_context.call_kwargs["stream"]:
+            return ""
 
         return message["content"]
 
