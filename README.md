@@ -1,18 +1,15 @@
 # 🕵️‍♂️ jAIms 
 
-jAIms is a lightweight python framework built on top of the openai library that lets you create powerful llm agents.
-It is designed with simplicity and ease of use in mind, it only depends on `openai` and `tiktoken`.
-
-## ⚠️ Project status
-
-This is a work in progress. I need to write some tests and add many features, but the core functionality is there.
-I'm creating this framework because I need a lightweight and easy to use framework to create llm agents, this project pales in comparison with more advanced tools like [langchain](https://github.com/hwchase17/langchain) and the likes, but if you need a simple tool to create agents based on the openai api, you might find jAIms useful.
+jAIms is a lightweight Python framework built on top of the OpenAI library that lets you create powerful LLM agents.
+It is designed with simplicity and ease of use in mind and only depends on `openai` and `tiktoken`.
 
 ## Installation
 
+TODO: add to pypi
+
 ## 👨‍💻 Usage
 
-Building an agent is as simple as that:
+Building an agent is as simple as this:
 
 ```python
 from jaims import JAImsAgent
@@ -29,11 +26,11 @@ response = agent.send_messages([
 print(response)
 ```
 
-The messages accepted by the `send_messages` function are those specified in the [official openai docs](https://platform.openai.com/docs/api-reference/chat/create).
+The messages accepted by the `send_messages` function are those specified in the [official OpenAI docs](https://platform.openai.com/docs/api-reference/chat/create).
 
 ### ⚙️ Functions
 
-Of course an agent is just a chatbot if there is no support for functions. jAIms uses the built in openai function feature to call functions you pass to it. Here's an example where we create a simple sum function and make a simple agent that lets you sum two numbers:
+Of course, an agent is just a chatbot if it doesn't support functions. jAIms uses the built-in OpenAI function feature to call functions you pass to it. Here's an example where we create a simple sum function and make a simple agent that lets you sum two numbers:
 
 ```python
 import jaims
@@ -85,19 +82,41 @@ while True:
         print("\n")
 ```
 
-I will routinely update the examples to show more advanced features. 
-Also I've made sure to document the code as better as I can, anything should be self explanatory.
+### ✨ Other features
+
+- Complete control over openai call parameters (temperature, top_p, n, max_tokens, etc.)
+- Automatic chat history management
+- Configuration of the OpenAI model to use
+- Injectable prompt to shape agent behavior
+- Safety checks to prevent the agent from endlessly looping over function calls
+
+I will routinely update the examples to demonstrate more advanced features.
+Also, I've made sure to document the code as best as I can; everything should be self-explanatory; I plan to add a proper documentation in the future if this project gets enough traction.
 
 ## 🤖 Supported models
 
-Right now jaims supports the new openai models with functions enabled, specifically:
+Currently, jAIms supports the new OpenAI models with functions enabled, specifically:
 
 - `gpt-3.5-turbo-0613`
 - `gpt-3.5-turbo-16k-0613`
 - `gpt-4-0613`
 
-I'm not planning to add support for non-openai models right now, but any contribution is appreciated.
+I'm not planning to add support for non-OpenAI models at the moment, but contributions are always appreciated.
+
+## ⚠️ Project status
+
+This is a work in progress. I still need to write some tests and add many features, but the core functionality is there.
+I'm creating this framework because I need a lightweight and easy-to-use framework to create LLM agents. This project may not be as advanced as tools like [langchain](https://github.com/hwchase17/langchain) and others, but if you need a simple tool to create agents based on the OpenAI API, you might find jAIms useful.
+
+
+TODOS:
+
+- [ ] Add tests
+- [ ] Add more examples
+- [ ] Add more chat history optimization strategies
+- [ ] Add function calling callbacks 
+- [ ] Add history persistance
 
 ## 📝 License
 
-should be MIT, but need to add this properly.
+The license will be MIT, but I need to add this properly.
