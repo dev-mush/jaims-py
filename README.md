@@ -1,4 +1,6 @@
-# 🕵️‍♂️ jAIms 
+# jAIms 
+
+_My name is Bot, jAIMs Bot._ 🕶️
 
 jAIms is a lightweight Python framework built on top of the OpenAI library that lets you create powerful LLM agents.
 It is designed with simplicity and ease of use in mind and only depends on `openai` and `tiktoken`.
