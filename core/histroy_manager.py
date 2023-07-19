@@ -1,5 +1,5 @@
 from typing import List, Optional
-from core.constants import DEFAULT_MAX_TOKENS, JAImsGPTModel, estimate_token_count
+from core.openai_wrappers import DEFAULT_MAX_TOKENS, JAImsGPTModel, estimate_token_count
 
 from core.exceptions import JAImsTokensLimitExceeded
 import tiktoken

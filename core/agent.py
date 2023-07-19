@@ -4,7 +4,7 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 import openai
 
-from core.constants import (
+from core.openai_wrappers import (
     DEFAULT_MAX_TOKENS,
     MAX_CONSECUTIVE_CALLS,
     JAImsGPTModel,
