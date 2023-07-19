@@ -1,5 +1,5 @@
 from typing import List, Optional
-from core.constants import DEFAULT_MAX_TOKENS, JAImsGPTModel
+from core.constants import DEFAULT_MAX_TOKENS, JAImsGPTModel, estimate_token_count
 
 from core.exceptions import JAImsTokensLimitExceeded
 import tiktoken
@@ -62,9 +62,28 @@ class HistoryManager:
             message : str
                 the message to be added
         """
-        self.__history.extend(messages)
 
-    def build_messages_from_history(
+        if not all(isinstance(message, dict) for message in messages):
+            raise TypeError(
+                "All messages must be dicts, conforming to OpenAI API specification."
+            )
+
+        keys = {"role", "content", "name"}
+        parsed = [
+            {k: v for k, v in message.items() if k in keys} for message in messages
+        ]
+
+        for message, parsed_message in zip(messages, parsed):
+            if "function_call" in message:
+                function_call = message["function_call"]
+                parsed_message["function_call"] = {
+                    "name": function_call["name"],
+                    "arguments": function_call["arguments"],
+                }
+
+        self.__history.extend(parsed)
+
+    def get_messages(
         self,
         agent_max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> List:
@@ -164,7 +183,9 @@ class HistoryManager:
                 has_optimized=False,
             )
 
-        return self.mandatory_context + history_buffer
+        llm_messages = self.mandatory_context + history_buffer
+
+        return llm_messages
 
     def clear_history(self):
         """
@@ -174,12 +195,4 @@ class HistoryManager:
 
     def __tokens_from_messages(self, messages: List):
         """Returns the number of tokens used by a list of messages."""
-        try:
-            encoding = tiktoken.encoding_for_model(self.model.string)
-        except KeyError:
-            print("Warning: model not found. Using gpt-3.5-turbo encoding.")
-            encoding = tiktoken.get_encoding("gpt-3.5-turbo")
-
-        messages_json = json.dumps(messages)
-        messages_tokens = len(encoding.encode(messages_json))
-        return messages_tokens
+        return estimate_token_count(json.dumps(messages), self.model)
