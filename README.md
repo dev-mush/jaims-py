@@ -10,7 +10,9 @@ It is designed with simplicity and ease of use in mind and only depends on `open
 
 ## Installation
 
-TODO: add to pypi
+```bash
+pip install jaims-py
+```
 
 ## 👨‍💻 Usage
 
