@@ -5,8 +5,8 @@ with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 setup(
-    name="jaims",
-    version="0.1",
+    name="jaims-py",
+    version="0.0.1",
     packages=find_packages(),
     description="A Python package for creating simple AI Agents using the OpenAI API.",
     long_description=open("README.md").read(),
@@ -14,6 +14,6 @@ setup(
     author="Marco Musella",
     url="https://github.com/dev-mush/jaims",
     license="MIT",
-    keywords="OpenAI GPT-3 and GPT-4 conversational agent",
+    keywords="OpenAI GPT-3 and GPT-4 function enabled agent",
     install_requires=requirements,
 )
