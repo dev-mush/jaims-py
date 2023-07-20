@@ -1,3 +1,4 @@
+from __future__ import annotations
 from enum import Enum
 import json
 from typing import Any, List, Dict, Optional, Callable
@@ -30,8 +31,8 @@ class JAImsParamDescriptor:
         attributes_params_descriptors : list of JAImsParamDescriptor
             the list of parameters descriptors for the attributes of the parameter
             in case the parameter is an object, defualts to None
-        array_type_descriptor : JAImsParamDescriptor
-            the parameter descriptor for the array type in case the parameter is an array, defaults to None
+        array_type_descriptors : list of JAImsParamDescriptor
+            the parameter descriptors for the array type in case the parameter is an array, defaults to None
         enum_values:
             the list of values in case the parameter is an enum, defaults to None
         required : bool
@@ -44,8 +45,9 @@ class JAImsParamDescriptor:
         name: str,
         description: str,
         json_type: JAImsJsonSchemaType,
-        attributes_params_descriptors: Optional[List["JAImsParamDescriptor"]] = None,
-        array_type_descriptor: Optional["JAImsParamDescriptor"] = None,
+        attributes_params_descriptors: Optional[List[JAImsParamDescriptor]] = None,
+        array_type_descriptors: Optional[List[JAImsParamDescriptor]] = None,
+        array_type_any_valid: bool = True,
         enum_values: Optional[List[Any]] = None,
         required: bool = True,
     ):
@@ -53,7 +55,8 @@ class JAImsParamDescriptor:
         self.description = description
         self.json_type = json_type
         self.attributes_params_descriptors = attributes_params_descriptors
-        self.array_type_descriptor = array_type_descriptor
+        self.array_type_descriptors = array_type_descriptors
+        self.array_type_any_valid = array_type_any_valid
         self.enum_values = enum_values
         self.required = required
 
@@ -77,8 +80,14 @@ class JAImsParamDescriptor:
                 if param.required:
                     schema["required"].append(param.name)
 
-        if self.json_type == JAImsJsonSchemaType.ARRAY and self.array_type_descriptor:
-            schema["items"] = {"type": self.array_type_descriptor.json_type.value}
+        if self.json_type == JAImsJsonSchemaType.ARRAY and self.array_type_descriptors:
+            items_schema = [
+                desc.get_jsonapi_schema() for desc in self.array_type_descriptors
+            ]
+            if self.array_type_any_valid:
+                schema["items"] = {"anyOf": items_schema}
+            else:
+                schema["items"] = [items_schema]
 
         if self.enum_values:
             schema["enum"] = self.enum_values
