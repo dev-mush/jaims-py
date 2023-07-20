@@ -12,7 +12,7 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Marco Musella",
-    url="https://github.com/dev-mush/jaims",
+    url="https://github.com/dev-mush/jaims-py",
     license="MIT",
     keywords="OpenAI GPT-3 and GPT-4 function enabled agent",
     install_requires=requirements,
