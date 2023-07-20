@@ -1,11 +1,15 @@
 from typing import List, Optional
-from core.constants import DEFAULT_MAX_TOKENS, JAImsGPTModel, estimate_token_count
+from jaims.openai_wrappers import (
+    DEFAULT_MAX_TOKENS,
+    JAImsGPTModel,
+    estimate_token_count,
+)
 
-from core.exceptions import JAImsTokensLimitExceeded
+from jaims.exceptions import JAImsTokensLimitExceeded
 import tiktoken
 import json
 
-from core.function_handler import JAImsFuncWrapper, parse_functions_to_json
+from jaims.function_handler import JAImsFuncWrapper, parse_functions_to_json
 
 
 class HistoryManager:

@@ -2,7 +2,7 @@ from enum import Enum
 import json
 from typing import Any, List, Dict, Optional, Callable
 
-from core.exceptions import JAImsUnexpectedFunctionCall
+from jaims.exceptions import JAImsUnexpectedFunctionCall
 
 
 # Enum class over all Json Types

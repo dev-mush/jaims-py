@@ -1,4 +1,4 @@
-from core import (
+from jaims import (
     JAImsAgent,
     JAImsFuncWrapper,
     JAImsParamDescriptor,

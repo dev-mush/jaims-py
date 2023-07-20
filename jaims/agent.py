@@ -4,24 +4,24 @@ from typing import Any, Dict, Generator, List, Optional, Union
 
 import openai
 
-from core.constants import (
+from jaims.openai_wrappers import (
     DEFAULT_MAX_TOKENS,
     MAX_CONSECUTIVE_CALLS,
     JAImsGPTModel,
     JaimsTokensExpense,
     estimate_token_count,
 )
-from core.exceptions import (
+from jaims.exceptions import (
     JAImsMissingOpenaiAPIKeyException,
     JAImsOpenAIErrorException,
     JAImsMaxConsecutiveFunctionCallsExceeded,
 )
-from core.function_handler import (
+from jaims.function_handler import (
     JAImsFuncWrapper,
     JAImsFunctionHandler,
     parse_functions_to_json,
 )
-from core.histroy_manager import HistoryManager
+from jaims.histroy_manager import HistoryManager
 
 
 # private class used to store a call context when looping happens because of function
