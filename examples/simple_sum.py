@@ -65,7 +65,7 @@ def main():
         user_input = input("> ")
         if user_input == "exit":
             break
-        response = agent.send_messages(
+        response = agent.run(
             [{"role": "user", "content": user_input}],
             stream=stream,
         )

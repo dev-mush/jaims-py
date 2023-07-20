@@ -57,8 +57,8 @@ class JAImsAgent:
 
     Methods
     -------
-        send_messages(messages, stream: bool optional) -> JAImsResponse
-            sends a list of messages to GPT and returns the response
+        run(messages, stream: bool optional) -> JAImsResponse
+            performs the call to OpenAI and returns the response
         clear_history()
             clears the agent history
         get_expenses() -> List[JaimsTokensExpense]
@@ -112,17 +112,18 @@ class JAImsAgent:
             optimize_history=optimize_context,
         )
 
-    def send_messages(
+    def run(
         self,
-        messages,
-        max_tokens=DEFAULT_MAX_TOKENS,
-        stream=False,
-        temperature=0.0,
-        top_p=None,
-        n=1,
+        messages: List[dict] = [],
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        stream: bool = False,
+        temperature: float = 0.0,
+        top_p: Optional[int] = None,
+        n: int = 1,
+        function_call: str = "auto",
     ) -> Union[str, Generator[str, None, None]]:
         """
-        Sends a list of messages to GPT and returns the response.
+        Calls OpenAI with the passed parameters and returns or streams the response.
 
         Parameters
         ----------
@@ -130,9 +131,20 @@ class JAImsAgent:
                 the list of messages to be sent
             stream : bool (optional)
                 whether to stream the response or not, defaults to False
-            response_buffer : int (optional)
-                how much spase to leave in the context for the Agent Response when sending a new message.
+            max_tokens : int (optional)
+                the maximum tokens to be used to generate the answer
                 defaults to 512
+            temperature : float (optional)
+                the temperature to be used to generate the answer
+                defaults to 0.0
+            top_p : float (optional)
+                the top_p to be used to generate the answer
+                defaults to None
+            n : int (optional)
+                the number of answers to be generated
+                defaults to 1
+            function_call : str (optional)
+                the function call to be used, defaults to "auto"
 
         Returns
         -------
@@ -152,7 +164,7 @@ class JAImsAgent:
         }
 
         if self.functions:
-            kwargs["function_call"] = "auto"
+            kwargs["function_call"] = function_call
             kwargs["functions"] = parse_functions_to_json(self.functions)
 
         call_context = OpenaiCallContext(kwargs)

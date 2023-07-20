@@ -23,7 +23,7 @@ from jaims import JAImsAgent
 
 agent = JAImsAgent()
 
-response = agent.send_messages([
+response = agent.run([
     {
         "role": "user",
         "content": "Hi!"
@@ -33,7 +33,7 @@ response = agent.send_messages([
 print(response)
 ```
 
-The messages accepted by the `send_messages` function are those specified in the [official OpenAI docs](https://platform.openai.com/docs/api-reference/chat/create).
+The parameters accepted by the `run` method are those specified in the [official OpenAI docs](https://platform.openai.com/docs/api-reference/chat/create).
 
 ### ⚙️ Functions
 
@@ -78,7 +78,7 @@ while True:
     user_input = input("> ")
     if user_input == "exit":
         break
-    response = agent.send_messages(
+    response = agent.run(
         [{"role": "user", "content": user_input}],
         stream=True,
     )
