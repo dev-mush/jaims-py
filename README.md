@@ -1,5 +1,6 @@
 
-![jaims_logo](https://github.com/dev-mush/jaims/assets/669003/ac429608-6c49-4e41-a361-50da9569bfec)
+![jaims_logo_small](https://github.com/dev-mush/jaims-py/assets/669003/97e2c8c0-1979-4ed9-819d-d167a1728be8)
+
 
 # jAIms 
 
