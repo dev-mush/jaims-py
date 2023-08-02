@@ -1,6 +1,11 @@
 from __future__ import annotations
+
 from enum import Enum
+import time
+from typing import Any, List, Optional, Dict, Union
+import openai
 import tiktoken
+import logging
 
 DEFAULT_MAX_TOKENS = 512
 MAX_CONSECUTIVE_CALLS = 5
@@ -27,7 +32,7 @@ class JAImsGPTModel(Enum):
         return self.string
 
 
-class JaimsTokensExpense:
+class JAImsTokensExpense:
     """
     Tracks the number of tokens spent on a job and on which GPTModel.
     """
@@ -49,8 +54,8 @@ class JaimsTokensExpense:
     @staticmethod
     def from_openai_usage_dictionary(
         gpt_model: JAImsGPTModel, dictionary: dict
-    ) -> JaimsTokensExpense:
-        return JaimsTokensExpense(
+    ) -> JAImsTokensExpense:
+        return JAImsTokensExpense(
             gpt_model=gpt_model,
             prompt_tokens=dictionary["prompt_tokens"],
             completion_tokens=dictionary["completion_tokens"],
@@ -62,7 +67,7 @@ class JaimsTokensExpense:
         self.completion_tokens += completion_tokens
         self.total_tokens += total_tokens
 
-    def add_from(self, other_expense: JaimsTokensExpense):
+    def add_from(self, other_expense: JAImsTokensExpense):
         self.prompt_tokens += other_expense.prompt_tokens
         self.completion_tokens += other_expense.completion_tokens
         self.total_tokens += other_expense.total_tokens
@@ -105,3 +110,63 @@ def estimate_token_count(string: str, model: JAImsGPTModel) -> int:
     encoding = tiktoken.encoding_for_model(model.string)
     num_tokens = len(encoding.encode(string))
     return num_tokens
+
+
+def get_openai_response(
+    messages,
+    model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    stream: bool = False,
+    temperature: float = 0.0,
+    top_p: Optional[int] = None,
+    n: int = 1,
+    function_call: Union[str, Dict] = "auto",
+    functions: Optional[List[Dict[str, Any]]] = None,
+    max_retries=15,
+    delay=10,
+):
+    retries = 0
+    logger = logging.getLogger(__name__)
+
+    kwargs = {
+        "model": model.string,
+        "temperature": temperature,
+        "n": n,
+        "stream": stream,
+        "messages": messages,
+        "top_p": top_p,
+        "max_tokens": max_tokens,
+    }
+
+    if functions:
+        kwargs["functions"] = functions
+        kwargs["function_call"] = function_call
+        logger.info("Using functions")
+        logger.debug(f"Function call:\n{kwargs['function_call']}")
+        logger.debug(kwargs["functions"])
+
+    while retries < max_retries:
+        try:
+            response = openai.ChatCompletion.create(
+                **kwargs,
+            )
+
+            return response
+        except openai.OpenAIError as error:
+            logger.error(f"OpenAI API error code: {error.code}")
+            logger.error(f"OpenAI API error:\n{error}\n")
+
+            # check if error contains the string "Rate limit"
+            if "rate limit" in str(error).lower():
+                logger.warning(f"Retrying in 15 seconds...")
+                time.sleep(15)
+            else:
+                logger.warning(f"Retrying in {delay} seconds...")
+                time.sleep(delay)
+            retries += 1
+
+    max_retries_error = (
+        f"Max retries exceeded! OpenAI API call failed {max_retries} times."
+    )
+    logger.error(max_retries_error)
+    raise Exception(max_retries_error)

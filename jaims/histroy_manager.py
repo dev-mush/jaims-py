@@ -6,7 +6,6 @@ from jaims.openai_wrappers import (
 )
 
 from jaims.exceptions import JAImsTokensLimitExceeded
-import tiktoken
 import json
 
 from jaims.function_handler import JAImsFuncWrapper, parse_functions_to_json
@@ -45,16 +44,17 @@ class HistoryManager:
 
     def __init__(
         self,
-        history: List = [],
+        history: Optional[List] = None,
         model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
         mandatory_context: Optional[List] = None,
         functions: Optional[List[JAImsFuncWrapper]] = None,
         optimize_history: bool = True,
     ):
-        self.__history = history
+        self.__history = history or []
         self.model = model
         self.mandatory_context = mandatory_context or []
-        self.json_functions = parse_functions_to_json(functions or [])
+        funcs_to_parse = functions or []
+        self.json_functions = parse_functions_to_json(funcs_to_parse)
         self.optimize_history = optimize_history
 
     def add_messages(self, messages: List):
@@ -196,6 +196,12 @@ class HistoryManager:
         Clears the history.
         """
         self.__history = []
+
+    def get_history(self, optimized=False):
+        if optimized:
+            return self.get_messages()
+
+        return self.__history
 
     def __tokens_from_messages(self, messages: List):
         """Returns the number of tokens used by a list of messages."""
