@@ -91,7 +91,7 @@ class HistoryManager:
 
         self.__history.extend(parsed)
 
-    def get_messages(
+    def get_optimised_messages(
         self,
         agent_max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> List:
@@ -207,7 +207,7 @@ class HistoryManager:
 
     def get_history(self, optimized=False):
         if optimized:
-            return self.get_messages()
+            return self.get_optimised_messages()
 
         return self.__history
 

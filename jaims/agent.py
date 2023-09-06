@@ -49,7 +49,13 @@ class JAImsAgent:
         optimize_context: bool
             wether to optimize the context for each call to OpenAi or not. It is useful when the agent
             is used for instance as a conversational bot, this parameter ensures that, when reaching context limits,
-            older messages will be popped from the history before being passed to OpenAI, defaults to True
+            older messages will be popped from the history before being passed to OpenAI, defaults to True.
+            When set to false, once the context limit is reached, an exception will be raised.
+        last_n_turns: int
+            The number of last messages that has to be kept in the history, default (0) is uncapped.
+            Uncapped means that the history is sent in full as long as it fits the context and then, depending
+            on the value of optimize_context, it will be optimized trimming the oldest messages or an exception
+            will be raised when saturated.
         max_consecutive_calls: int
             the maximum number of consecutive function calls that can be made by the agent, defaults to 5
             for safety reasons, to avoid unwanted loops that might impact up token usage
@@ -82,11 +88,12 @@ class JAImsAgent:
 
     def __init__(
         self,
-        model=JAImsGPTModel.GPT_3_5_TURBO,
+        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
         functions: Optional[List[JAImsFuncWrapper]] = None,
         initial_prompts: Optional[List[Dict]] = None,
-        max_consecutive_calls=MAX_CONSECUTIVE_CALLS,
-        optimize_context=True,
+        max_consecutive_calls: int = MAX_CONSECUTIVE_CALLS,
+        optimize_context: bool = True,
+        last_n_turns: Optional[int] = None,
         openai_api_key: Optional[str] = None,
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -115,6 +122,7 @@ class JAImsAgent:
             functions=self.functions,
             mandatory_context=self.initial_prompts,
             optimize_history=optimize_context,
+            last_n_turns=last_n_turns,
         )
 
     def run(
@@ -195,9 +203,11 @@ class JAImsAgent:
                 f"Max consecutive function calls exceeded ({self.max_consecutive_calls})"
             )
 
-        messages = self.__history_manager.get_messages(
+        messages = self.__history_manager.get_optimised_messages(
             agent_max_tokens=call_context.call_kwargs["max_tokens"],
         )
+
+        print(messages)
 
         call_context.call_kwargs["messages"] = messages
 
@@ -220,7 +230,7 @@ class JAImsAgent:
 
                 if response_delta["choices"][0]["finish_reason"] is not None:
                     # log token expense
-                    sent_messages = self.__history_manager.get_messages(
+                    sent_messages = self.__history_manager.get_optimised_messages(
                         agent_max_tokens=call_context.call_kwargs["max_tokens"],
                     )
                     prompt_tokens = estimate_token_count(
