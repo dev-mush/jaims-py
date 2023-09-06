@@ -23,6 +23,8 @@ class HistoryManager:
             the list of functions that can be called by the agent, used to compute token usage
         initial_prompts: list (optional)
             the list of initial prompts to be used by the agent, useful to compute token usage
+        last_n_turns: int (optional)
+            if set, specifies the n last messages to be sent, defaults to None
 
     Methods
     -------
@@ -49,6 +51,7 @@ class HistoryManager:
         mandatory_context: Optional[List] = None,
         functions: Optional[List[JAImsFuncWrapper]] = None,
         optimize_history: bool = True,
+        last_n_turns: Optional[int] = None,
     ):
         self.__history = history or []
         self.model = model
@@ -56,6 +59,7 @@ class HistoryManager:
         funcs_to_parse = functions or []
         self.json_functions = parse_functions_to_json(funcs_to_parse)
         self.optimize_history = optimize_history
+        self.last_n_turns = last_n_turns
 
     def add_messages(self, messages: List):
         """
@@ -148,6 +152,10 @@ class HistoryManager:
 
         # Copying the whole history to avoid altering the original one
         history_buffer = self.__history.copy()
+
+        # If last_n_turns is set, only keep the last n messages
+        if self.last_n_turns is not None:
+            history_buffer = history_buffer[-self.last_n_turns :]
 
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens
