@@ -207,8 +207,6 @@ class JAImsAgent:
             agent_max_tokens=call_context.call_kwargs["max_tokens"],
         )
 
-        print(messages)
-
         call_context.call_kwargs["messages"] = messages
 
         response = get_openai_response(**call_context.call_kwargs)
