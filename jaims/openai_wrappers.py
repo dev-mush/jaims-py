@@ -112,6 +112,34 @@ def estimate_token_count(string: str, model: JAImsGPTModel) -> int:
     return num_tokens
 
 
+class ErrorHandlingMethod(Enum):
+    FAIL = "fail"
+    RETRY = "retry"
+    EXPONENTIAL_BACKOFF = "exponential_backoff"
+
+
+def __handle_openai_error(error: openai.OpenAIError) -> ErrorHandlingMethod:
+
+    logger = logging.getLogger(__name__)
+
+    # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
+    # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
+    error_handling_map = {
+        openai.error.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
+        openai.error.ServiceUnavailableError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
+        openai.error.APIError: ErrorHandlingMethod.RETRY,
+        openai.error.TryAgain: ErrorHandlingMethod.RETRY,
+        openai.error.Timeout: ErrorHandlingMethod.RETRY,
+        openai.error.APIConnectionError: ErrorHandlingMethod.RETRY,        
+    }
+
+    for error_type, error_handling_method in error_handling_map.items():
+        if isinstance(error, error_type):
+            return error_handling_method
+
+    return ErrorHandlingMethod.FAIL
+
+
 def get_openai_response(
     messages,
     model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
