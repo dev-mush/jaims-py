@@ -6,10 +6,10 @@ from typing import Any, Dict, Generator, List, Optional, Union
 import openai
 
 from jaims.openai_wrappers import (
-    DEFAULT_MAX_TOKENS,
-    MAX_CONSECUTIVE_CALLS,
     JAImsGPTModel,
     JAImsTokensExpense,
+    JAImsOpenaiKWArgs,
+    JAImsOptions,
     estimate_token_count,
     get_openai_response,
 )
@@ -18,18 +18,29 @@ from jaims.exceptions import (
     JAImsMaxConsecutiveFunctionCallsExceeded,
 )
 from jaims.function_handler import (
-    JAImsFuncWrapper,
     JAImsFunctionHandler,
-    parse_functions_to_json,
 )
 from jaims.histroy_manager import HistoryManager
 
 
 # private class used to store a call context when looping happens because of function
-class OpenaiCallContext:
-    def __init__(self, call_kwargs: dict, iterations: int = 0):
-        self.call_kwargs = call_kwargs
+class JAImsCallContext:
+    def __init__(
+        self,
+        openai_kwargs: JAImsOpenaiKWArgs,
+        call_options: JAImsOptions,
+        iterations: int = 0,
+    ):
+        self.openai_kwargs = openai_kwargs
+        self.call_options = call_options
         self.iterations = iterations
+
+    def add_iteration(self):
+        self.iterations += 1
+        if self.iterations > self.call_options.max_consecutive_function_calls:
+            raise JAImsMaxConsecutiveFunctionCallsExceeded(
+                f"Max consecutive function calls exceeded ({self.call_options.max_consecutive_function_calls})"
+            )
 
 
 class JAImsAgent:
@@ -73,6 +84,12 @@ class JAImsAgent:
             optimized version, otherwise the full history since the beginning of this agent session
         get_expenses() -> List[JaimsTokensExpense]
             returns the currently spent tokens for this agent session, one for each model used
+        get_last_run_expenses() -> List[JaimsTokensExpense]
+            returns the spent tokens for the last run of the agent, one for each model used, it is reset at each run
+        get_openai_responses() -> List[dict]
+            returns the list of raw responses from OpenAI for the entire session
+        get_openai_last_run_responses() -> List[dict]
+            returns the list of raw responses from OpenAI for the last run of the agent, it is reset at each run
 
 
     Raises
@@ -88,12 +105,8 @@ class JAImsAgent:
 
     def __init__(
         self,
-        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
-        functions: Optional[List[JAImsFuncWrapper]] = None,
-        initial_prompts: Optional[List[Dict]] = None,
-        max_consecutive_calls: int = MAX_CONSECUTIVE_CALLS,
-        optimize_context: bool = True,
-        last_n_turns: Optional[int] = None,
+        openai_kwargs: JAImsOpenaiKWArgs = JAImsOpenaiKWArgs(),
+        options: JAImsOptions = JAImsOptions(),
         openai_api_key: Optional[str] = None,
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -101,41 +114,23 @@ class JAImsAgent:
             raise JAImsMissingOpenaiAPIKeyException()
         openai.api_key = openai_api_key
 
-        self.model = model
-        self.functions = functions or []
-        self.initial_prompts = initial_prompts or []
-        self.max_consecutive_calls = max_consecutive_calls
-        self.__expense = {
-            JAImsGPTModel.GPT_3_5_TURBO.string: JAImsTokensExpense(
-                gpt_model=JAImsGPTModel.GPT_3_5_TURBO
-            ),
-            JAImsGPTModel.GPT_3_5_TURBO_16K.string: JAImsTokensExpense(
-                gpt_model=JAImsGPTModel.GPT_3_5_TURBO_16K
-            ),
-            JAImsGPTModel.GPT_4.string: JAImsTokensExpense(
-                gpt_model=JAImsGPTModel.GPT_4
-            ),
-        }
-        self.__function_handler = JAImsFunctionHandler(self.functions)
+        self.__openai_kwargs = openai_kwargs
+        self.__options = options
+        self.__expense = JAImsAgent.__init_expense_dictionary()
+        self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
+        self.__function_handler = JAImsFunctionHandler()
         self.__history_manager = HistoryManager(
-            model=self.model,
-            functions=self.functions,
-            mandatory_context=self.initial_prompts,
-            optimize_history=optimize_context,
-            last_n_turns=last_n_turns,
+            openai_kwargs=self.__openai_kwargs,
+            options=self.__options,
         )
+        self.__openai_last_run_responses = []
+        self.__openai_responses = []
 
     def run(
         self,
         messages: Optional[List[dict]] = None,
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        stream: bool = False,
-        temperature: float = 0.0,
-        top_p: Optional[int] = None,
-        n: int = 1,
-        function_call: Union[str, Dict] = "auto",
-        max_retries: int = 15,
-        delay: int = 10,
+        override_options: Optional[JAImsOptions] = None,
+        override_openai_kwargs: Optional[JAImsOpenaiKWArgs] = None,
     ) -> Union[str, Generator[str, None, None]]:
         """
         Calls OpenAI with the passed parameters and returns or streams the response.
@@ -173,51 +168,41 @@ class JAImsAgent:
                 the response object
         """
 
-        self.__history_manager.add_messages(messages or [])
+        messages = override_openai_kwargs.messages or messages or []
+        self.__history_manager.add_messages(messages)
+        options = override_options or self.__options
+        openai_kwargs = override_openai_kwargs or self.__openai_kwargs
+        call_context = JAImsCallContext(openai_kwargs, options)
 
-        kwargs = {
-            "model": self.model,
-            "temperature": temperature,
-            "top_p": top_p,
-            "stream": stream,
-            "max_tokens": max_tokens,
-            "n": n,
-            "max_retries": max_retries,
-            "delay": delay,
-        }
-
-        if self.functions:
-            kwargs["function_call"] = function_call
-            kwargs["functions"] = parse_functions_to_json(self.functions)
-
-        call_context = OpenaiCallContext(kwargs)
-
+        self.__openai_last_run_responses = []
+        self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
         return self.__call_openai(call_context)
 
     def __call_openai(
-        self, call_context: OpenaiCallContext
+        self, call_context: JAImsCallContext
     ) -> Union[str, Generator[str, None, None]]:
-        call_context.iterations += 1
-        if call_context.iterations > self.max_consecutive_calls:
-            raise JAImsMaxConsecutiveFunctionCallsExceeded(
-                f"Max consecutive function calls exceeded ({self.max_consecutive_calls})"
-            )
-
-        messages = self.__history_manager.get_optimised_messages(
-            agent_max_tokens=call_context.call_kwargs["max_tokens"],
+        # throws if max consecutive calls is exceeded
+        call_context.add_iteration()
+        messages = self.__history_manager.get_messages_for_current_run(
+            options=call_context.call_options,
+            openai_kwargs=call_context.openai_kwargs,
         )
 
-        call_context.call_kwargs["messages"] = messages
+        call_context.openai_kwargs.messages = messages
 
-        response = get_openai_response(**call_context.call_kwargs)
+        response = get_openai_response(
+            call_context.openai_kwargs, call_context.call_options
+        )
+        self.__openai_last_run_responses.append(response)
+        self.__openai_responses.append(response)
 
-        if call_context.call_kwargs["stream"]:
+        if call_context.openai_kwargs.stream:
             return self.__process_openai_stream_response(response, call_context)
         else:
             return self.__process_openai_response(response, call_context)
 
     def __process_openai_stream_response(
-        self, response: Any, call_context: OpenaiCallContext
+        self, response: Any, call_context: JAImsCallContext
     ) -> Generator[str, None, None]:
         message = {}
         for response_delta in response:
@@ -226,65 +211,91 @@ class JAImsAgent:
                 message_delta = response_delta["choices"][0]["delta"]
                 message = JAImsAgent.__merge_message_deltas(message, message_delta)
 
+                if call_context.call_options.debug:
+                    print(
+                        message_delta["function_call"]["arguments"], end="", flush=True
+                    )
+
                 if response_delta["choices"][0]["finish_reason"] is not None:
                     # log token expense
-                    sent_messages = self.__history_manager.get_optimised_messages(
-                        agent_max_tokens=call_context.call_kwargs["max_tokens"],
+                    self.__handle_token_expense_from_openai_response(
+                        response_delta, call_context
                     )
-                    prompt_tokens = estimate_token_count(
-                        json.dumps(sent_messages), model=self.model
-                    )
-                    completion_tokens = estimate_token_count(
-                        json.dumps(message), model=self.model
-                    )
-                    total_tokens = prompt_tokens + completion_tokens
-                    rough_expense = JAImsTokensExpense(
-                        gpt_model=self.model,
-                        prompt_tokens=prompt_tokens,
-                        completion_tokens=completion_tokens,
-                        total_tokens=total_tokens,
-                        rough_estimate=True,
-                    )
-                    self.__log_new_expense(rough_expense)
 
                     yield from self.__handle_response_message(message, call_context)
 
                 if "content" in message_delta and message_delta["content"] is not None:
                     yield response_delta["choices"][0]["delta"]["content"]
 
-    def __process_openai_response(self, response: Any, call_context: OpenaiCallContext):
+    def __process_openai_response(self, response: Any, call_context: JAImsCallContext):
         if len(response["choices"]) == 0:
             return ""
 
         # log token expense
-        expense = JAImsTokensExpense.from_openai_usage_dictionary(
-            self.model, response["usage"]
-        )
-        self.__log_new_expense(expense)
+        self.__handle_token_expense_from_openai_response(response, call_context)
 
         message = response["choices"][0]["message"]
         return self.__handle_response_message(message, call_context)
 
-    def __handle_response_message(self, message, call_context):
+    def __handle_response_message(self, message, call_context: JAImsCallContext):
         self.__history_manager.add_messages([message])
         logger = logging.getLogger(__name__)
         logger.debug(f"OpenAI response:\n{message}")
 
         if "function_call" in message:
             result_message = self.__function_handler.handle_from_message(
-                message=message
+                message=message,
+                functions=call_context.openai_kwargs.functions,
             )
-            if call_context.call_kwargs["function_call"] == "auto":
+            if call_context.openai_kwargs.function_call == "auto":
                 self.__history_manager.add_messages([result_message])
                 return self.__call_openai(call_context)
 
-        if call_context.call_kwargs["stream"]:
+        if call_context.openai_kwargs.stream:
             return ""
 
         return message["content"]
 
-    def __log_new_expense(self, expense: JAImsTokensExpense):
+    def __handle_token_expense_from_openai_response(
+        self, response, call_context: JAImsCallContext
+    ):
+        if call_context.openai_kwargs.stream:
+            expense = JAImsTokensExpense.from_openai_usage_dictionary(
+                call_context.openai_kwargs.model, response["usage"]
+            )
+        else:
+            sent_messages = self.__history_manager.get_messages_for_current_run(
+                agent_max_tokens=call_context.openai_kwargs.max_tokens,
+            )
+            prompt_tokens = estimate_token_count(
+                json.dumps(sent_messages), model=call_context.openai_kwargs.model
+            )
+            completion_tokens = estimate_token_count(
+                json.dumps(response), model=call_context.openai_kwargs.model
+            )
+            total_tokens = prompt_tokens + completion_tokens
+            expense = JAImsTokensExpense(
+                gpt_model=call_context.openai_kwargs.model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                rough_estimate=True,
+            )
+
+        self.__last_run_expense[expense.gpt_model.string].add_from(expense)
         self.__expense[expense.gpt_model.string].add_from(expense)
+
+    def get_openai_responses(self) -> List[dict]:
+        """
+        Returns the list of raw responses from OpenAI.
+        """
+        return self.__openai_responses
+
+    def get_openai_last_run_responses(self) -> List[dict]:
+        """
+        Returns the list of raw responses from OpenAI for the last run of the agent.
+        """
+        return self.__openai_last_run_responses
 
     def get_expenses(self):
         """
@@ -294,11 +305,35 @@ class JAImsAgent:
             expense for expense in self.__expense.values() if expense.total_tokens > 0
         ]
 
+    def get_last_run_expenses(self):
+        """
+        Returns the tokens spent in the last run of the agent in an array, one for each model.
+        """
+        return [
+            expense
+            for expense in self.__last_run_expense.values()
+            if expense.total_tokens > 0
+        ]
+
     def get_history(self, optimized: bool = False):
         """
         Returns the current history of the agent.
         """
         return self.__history_manager.get_history(optimized=optimized)
+
+    @staticmethod
+    def __init_expense_dictionary():
+        return {
+            JAImsGPTModel.GPT_3_5_TURBO.string: JAImsTokensExpense(
+                gpt_model=JAImsGPTModel.GPT_3_5_TURBO
+            ),
+            JAImsGPTModel.GPT_3_5_TURBO_16K.string: JAImsTokensExpense(
+                gpt_model=JAImsGPTModel.GPT_3_5_TURBO_16K
+            ),
+            JAImsGPTModel.GPT_4.string: JAImsTokensExpense(
+                gpt_model=JAImsGPTModel.GPT_4
+            ),
+        }
 
     @staticmethod
     def __merge_message_deltas(current: dict, delta: dict) -> dict:

@@ -172,10 +172,9 @@ class JAImsFunctionHandler:
             the list of functions to be called
     """
 
-    def __init__(self, functions: List[JAImsFuncWrapper] = []):
-        self.functions = functions
-
-    def handle_from_message(self, message: Dict[str, Any]) -> Dict[str, Any]:
+    def handle_from_message(
+        self, message: Dict[str, Any], functions: List[JAImsFuncWrapper]
+    ) -> Dict[str, Any]:
         """
         Handles a function_call message, calling the appropriate function.
 
@@ -200,7 +199,7 @@ class JAImsFunctionHandler:
         dict_args = json.loads(function_args)
 
         # invoke function
-        call_result = self.__call_function(function_name, **dict_args)
+        call_result = self.__call_function(function_name, functions, **dict_args)
 
         # build function result message, call new send recursively
         function_result_message = {
@@ -211,11 +210,9 @@ class JAImsFunctionHandler:
 
         return function_result_message
 
-    def __call_function(self, function_name, *args, **kwargs):
+    def __call_function(self, function_name, functions, *args, **kwargs):
         # Check if function_name exists in functions, if not, raise UnexpectedFunctionCallException
-        function_wrapper = next(
-            (f for f in self.functions if f.name == function_name), None
-        )
+        function_wrapper = next((f for f in functions if f.name == function_name), None)
         if not function_wrapper:
             raise JAImsUnexpectedFunctionCall(function_name)
 

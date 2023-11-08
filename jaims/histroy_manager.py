@@ -1,14 +1,14 @@
 from typing import List, Optional
 from jaims.openai_wrappers import (
-    DEFAULT_MAX_TOKENS,
-    JAImsGPTModel,
     estimate_token_count,
+    JAImsOptions,
+    JAImsOpenaiKWArgs,
 )
 
 from jaims.exceptions import JAImsTokensLimitExceeded
 import json
 
-from jaims.function_handler import JAImsFuncWrapper, parse_functions_to_json
+from jaims.function_handler import parse_functions_to_json
 
 
 class HistoryManager:
@@ -47,19 +47,8 @@ class HistoryManager:
     def __init__(
         self,
         history: Optional[List] = None,
-        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
-        mandatory_context: Optional[List] = None,
-        functions: Optional[List[JAImsFuncWrapper]] = None,
-        optimize_history: bool = True,
-        last_n_turns: Optional[int] = None,
     ):
         self.__history = history or []
-        self.model = model
-        self.mandatory_context = mandatory_context or []
-        funcs_to_parse = functions or []
-        self.json_functions = parse_functions_to_json(funcs_to_parse)
-        self.optimize_history = optimize_history
-        self.last_n_turns = last_n_turns
 
     def add_messages(self, messages: List):
         """
@@ -91,9 +80,10 @@ class HistoryManager:
 
         self.__history.extend(parsed)
 
-    def get_optimised_messages(
+    def get_messages_for_current_run(
         self,
-        agent_max_tokens: int = DEFAULT_MAX_TOKENS,
+        options: JAImsOptions,
+        openai_kwargs: JAImsOpenaiKWArgs,
     ) -> List:
         """
         Returns the history.
@@ -150,33 +140,35 @@ class HistoryManager:
 
         """
 
+        if not options or not openai_kwargs:
+            raise ValueError("options and openai_kwargs must be provided.")
+
         # Copying the whole history to avoid altering the original one
         history_buffer = self.__history.copy()
 
         # If last_n_turns is set, only keep the last n messages
-        if self.last_n_turns is not None:
-            history_buffer = history_buffer[-self.last_n_turns :]
+        if options.last_n_turns is not None:
+            history_buffer = history_buffer[-options.last_n_turns :]
 
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens
-        compound_history = (
-            self.mandatory_context + history_buffer + (self.json_functions)
-        )
+        json_functions = parse_functions_to_json(openai_kwargs.functions or [])
+        compound_history = options.initial_prompts + history_buffer + (json_functions)
 
         # the max tokens to be used are the max tokens supported by the current
         # openai model minus the tokens to leave out for the response from openai
-        context_max_tokens = self.model.max_tokens - agent_max_tokens
+        context_max_tokens = openai_kwargs.model.max_tokens - openai_kwargs.max_tokens
 
         # calculate the tokens for the compound history
         messages_tokens = self.__tokens_from_messages(compound_history)
 
-        if self.optimize_history:
+        if options.optimize_context:
             while messages_tokens > context_max_tokens:
                 if not history_buffer:
                     raise JAImsTokensLimitExceeded(
-                        self.model.max_tokens,
+                        openai_kwargs.model.max_tokens,
                         messages_tokens,
-                        agent_max_tokens,
+                        openai_kwargs.max_tokens,
                         has_optimized=True,
                     )
 
@@ -185,17 +177,17 @@ class HistoryManager:
 
                 # Recalculating the tokens for the compound history
                 messages_tokens = self.__tokens_from_messages(
-                    self.mandatory_context + history_buffer + self.json_functions
+                    options.initial_prompts + history_buffer + json_functions
                 )
         elif messages_tokens > context_max_tokens:
             raise JAImsTokensLimitExceeded(
-                self.model.max_tokens,
+                openai_kwargs.model.max_tokens,
                 messages_tokens,
-                agent_max_tokens,
+                openai_kwargs.max_tokens,
                 has_optimized=False,
             )
 
-        llm_messages = self.mandatory_context + history_buffer
+        llm_messages = options.initial_prompts + history_buffer
 
         return llm_messages
 
@@ -205,10 +197,7 @@ class HistoryManager:
         """
         self.__history = []
 
-    def get_history(self, optimized=False):
-        if optimized:
-            return self.get_optimised_messages()
-
+    def get_history(self):
         return self.__history
 
     def __tokens_from_messages(self, messages: List):
