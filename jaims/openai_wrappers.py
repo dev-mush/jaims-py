@@ -4,11 +4,13 @@ from enum import Enum
 import time
 from typing import Any, List, Optional, Dict, Union
 import openai
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai import Stream
 import tiktoken
 import logging
 import random
 
-from jaims.function_handler import JAImsFuncWrapper, parse_functions_to_json
+from jaims.function_handler import JAImsFuncWrapper, parse_function_wrappers_to_tools
 
 DEFAULT_MAX_TOKENS = 512
 MAX_CONSECUTIVE_CALLS = 10
@@ -131,12 +133,9 @@ def __handle_openai_error(error: openai.OpenAIError) -> ErrorHandlingMethod:
     # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
     # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
     error_handling_map = {
-        openai.error.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
-        openai.error.ServiceUnavailableError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
-        openai.error.APIError: ErrorHandlingMethod.RETRY,
-        openai.error.TryAgain: ErrorHandlingMethod.RETRY,
-        openai.error.Timeout: ErrorHandlingMethod.RETRY,
-        openai.error.APIConnectionError: ErrorHandlingMethod.RETRY,
+        openai.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
+        openai.InternalServerError: ErrorHandlingMethod.RETRY,
+        openai.APITimeoutError: ErrorHandlingMethod.RETRY,
     }
 
     for error_type, error_handling_method in error_handling_map.items():
@@ -150,7 +149,7 @@ class JAImsOpenaiKWArgs:
     def __init__(
         self,
         model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
-        messages: List[str] = [],
+        messages: List[dict] = [],
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stream: bool = False,
         temperature: float = 0.0,
@@ -162,8 +161,8 @@ class JAImsOpenaiKWArgs:
         logit_bias: Optional[Dict[str, float]] = None,
         response_format: Optional[Dict] = None,
         stop: Union[Optional[str], Optional[List[str]]] = None,
-        function_call: Union[str, Dict] = "auto",
-        functions: Optional[List[JAImsFuncWrapper]] = None,
+        tool_choice: Union[str, Dict] = "auto",
+        tools: Optional[List[JAImsFuncWrapper]] = None,
     ):
         self.model = model
         self.messages = messages
@@ -178,8 +177,8 @@ class JAImsOpenaiKWArgs:
         self.logit_bias = logit_bias
         self.response_format = response_format
         self.stop = stop
-        self.function_call = function_call
-        self.functions = functions
+        self.tool_choice = tool_choice
+        self.tools = tools
 
     def to_dict(self):
         kwargs = {
@@ -200,9 +199,9 @@ class JAImsOpenaiKWArgs:
         if self.logit_bias:
             kwargs["logit_bias"] = self.logit_bias
 
-        if self.functions:
-            kwargs["functions"] = parse_functions_to_json(self.functions)
-            kwargs["function_call"] = self.function_call
+        if self.tools:
+            kwargs["tools"] = parse_function_wrappers_to_tools(self.tools)
+            kwargs["tool_choice"] = self.tool_choice
 
         return kwargs
 
@@ -240,7 +239,7 @@ class JAImsOptions:
 def get_openai_response(
     openai_kw_args: JAImsOpenaiKWArgs,
     call_options: JAImsOptions,
-):
+) -> Union[ChatCompletion, Stream[ChatCompletionChunk]]:
     retries = 0
     logger = logging.getLogger(__name__)
     # keeps how long to sleep between retries
@@ -250,7 +249,7 @@ def get_openai_response(
 
     while retries < call_options.max_retries:
         try:
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 **openai_kw_args.to_dict(),
             )
 
@@ -267,7 +266,7 @@ def get_openai_response(
 
             elif error_handling_method == ErrorHandlingMethod.EXPONENTIAL_BACKOFF:
                 logger.info(f"Performing exponential backoff")
-                jitter = 1 + jitter * random.random()
+                jitter = 1 + call_options.jitter * random.random()
                 backoff_time = backoff_time * call_options.exponential_base * jitter
 
                 if (

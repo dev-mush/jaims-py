@@ -174,7 +174,7 @@ class JAImsFunctionHandler:
 
     def handle_from_message(
         self, message: Dict[str, Any], functions: List[JAImsFuncWrapper]
-    ) -> Dict[str, Any]:
+    ) -> List[Dict[str, Any]]:
         """
         Handles a function_call message, calling the appropriate function.
 
@@ -193,35 +193,56 @@ class JAImsFunctionHandler:
             UnexpectedFunctionCallException
                 if the function name is not found in the functions list
         """
-        function_name = message["function_call"]["name"]
-        function_args = message["function_call"]["arguments"]
-
-        dict_args = json.loads(function_args)
+        # TODO: handle tool_calls none values
+        tool_calls = message.get("tool_calls", [])
+        function_calls = []
+        for tool_call in tool_calls:
+            tool_call_id = tool_call["id"]
+            function_name = tool_call["function"]["name"]
+            function_args = tool_call["function"]["arguments"]
+            function_calls.append(
+                {
+                    "tool_call_id": tool_call_id,
+                    "name": function_name,
+                    "args": json.loads(function_args) if function_args else {},
+                }
+            )
 
         # invoke function
-        call_result = self.__call_function(function_name, functions, **dict_args)
+        return self.__call_functions(function_calls, functions)
 
-        # build function result message, call new send recursively
-        function_result_message = {
-            "content": str(call_result),
-            "name": function_name,
-            "role": "function",
-        }
-
-        return function_result_message
-
-    def __call_function(self, function_name, functions, *args, **kwargs):
+    def __call_functions(
+        self, function_calls: List[dict], functions
+    ) -> List[dict[str, Any]]:
         # Check if function_name exists in functions, if not, raise UnexpectedFunctionCallException
-        function_wrapper = next((f for f in functions if f.name == function_name), None)
-        if not function_wrapper:
-            raise JAImsUnexpectedFunctionCall(function_name)
+
+        results = []
+        for fc in function_calls:
+            function_name = fc["name"]
+            function_wrapper = next(
+                (f for f in functions if f.name == function_name), None
+            )
+            if not function_wrapper:
+                raise JAImsUnexpectedFunctionCall(function_name)
+
+            fc_result = function_wrapper.function(**fc["args"])
+            results.append(
+                {
+                    "name": function_name,
+                    "tool_call_id": fc["tool_call_id"],
+                    "role": "tool",
+                    "content": json.dumps(fc_result),
+                }
+            )
 
         # If the name of the current function matches the provided name
         # Call the function and return its result
-        return function_wrapper.function(*args, **kwargs)
+        return results
 
 
-def parse_functions_to_json(functions: List[JAImsFuncWrapper]) -> List[Dict[str, Any]]:
+def parse_function_wrappers_to_tools(
+    functions: List[JAImsFuncWrapper],
+) -> List[Dict[str, Any]]:
     openai_functions = []
     for function in functions:
         function_data = {
@@ -234,6 +255,6 @@ def parse_functions_to_json(functions: List[JAImsFuncWrapper]) -> List[Dict[str,
             if v is not None
         }
 
-        openai_functions.append(function_data)
+        openai_functions.append({"type": "function", "function": function_data})
 
     return openai_functions

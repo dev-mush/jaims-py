@@ -4,6 +4,7 @@ import os
 from typing import Any, Dict, Generator, List, Optional, Union
 
 import openai
+from openai.types.chat import ChatCompletionChunk, ChatCompletion
 
 from jaims.openai_wrappers import (
     JAImsGPTModel,
@@ -196,45 +197,57 @@ class JAImsAgent:
         self.__openai_last_run_responses.append(response)
         self.__openai_responses.append(response)
 
-        if call_context.openai_kwargs.stream:
-            return self.__process_openai_stream_response(response, call_context)
+        if isinstance(response, openai.Stream):
+            return self.__receive_and_yield_chat_completion_chunk_response(
+                response, call_context
+            )
         else:
-            return self.__process_openai_response(response, call_context)
+            return self.__receive_chat_completion_response(response, call_context)
 
-    def __process_openai_stream_response(
-        self, response: Any, call_context: JAImsCallContext
+    def __receive_and_yield_chat_completion_chunk_response(
+        self,
+        response: openai.Stream[ChatCompletionChunk],
+        call_context: JAImsCallContext,
     ) -> Generator[str, None, None]:
-        message = {}
-        for response_delta in response:
-            if len(response_delta["choices"]) > 0:
+        accumulated_chunks = {}
+        for response_chunk in response:
+            if len(response_chunk.choices) > 0:
                 # check content exists
-                message_delta = response_delta["choices"][0]["delta"]
-                message = JAImsAgent.__merge_message_deltas(message, message_delta)
+                message_delta = response_chunk.choices[0].delta
+                accumulated_chunks = JAImsAgent.__merge_message_deltas(
+                    accumulated_chunks, message_delta.model_dump(exclude_none=True)
+                )
 
-                if call_context.call_options.debug_stream_function_call:
-                    print(
-                        message_delta["function_call"]["arguments"], end="", flush=True
-                    )
+                # if call_context.call_options.debug_stream_function_call:
+                #     print(
+                #         message_delta["function_call"]["arguments"], end="", flush=True
+                #     )
 
-                if response_delta["choices"][0]["finish_reason"] is not None:
+                if response_chunk.choices[0].finish_reason is not None:
                     # log token expense
                     self.__handle_token_expense_from_openai_response(
-                        response_delta, call_context
+                        accumulated_chunks, call_context
                     )
 
-                    yield from self.__handle_response_message(message, call_context)
+                    yield from self.__handle_response_message(
+                        accumulated_chunks, call_context
+                    )
 
-                if "content" in message_delta and message_delta["content"] is not None:
-                    yield response_delta["choices"][0]["delta"]["content"]
+                if message_delta.content:
+                    yield message_delta.content
 
-    def __process_openai_response(self, response: Any, call_context: JAImsCallContext):
-        if len(response["choices"]) == 0:
+    def __receive_chat_completion_response(
+        self, response: ChatCompletion, call_context: JAImsCallContext
+    ):
+        if len(response.choices) == 0:
             return ""
 
         # log token expense
-        self.__handle_token_expense_from_openai_response(response, call_context)
+        self.__handle_token_expense_from_openai_response(
+            response.model_dump(), call_context
+        )
 
-        message = response["choices"][0]["message"]
+        message = response.choices[0].message.model_dump()
         return self.__handle_response_message(message, call_context)
 
     def __handle_response_message(self, message, call_context: JAImsCallContext):
@@ -242,13 +255,13 @@ class JAImsAgent:
         logger = logging.getLogger(__name__)
         logger.debug(f"OpenAI response:\n{message}")
 
-        if "function_call" in message:
-            result_message = self.__function_handler.handle_from_message(
+        if "tool_calls" in message:
+            result_messages = self.__function_handler.handle_from_message(
                 message=message,
-                functions=call_context.openai_kwargs.functions,
+                functions=call_context.openai_kwargs.tools or [],
             )
-            if call_context.openai_kwargs.function_call == "auto":
-                self.__history_manager.add_messages([result_message])
+            if call_context.openai_kwargs.tool_choice == "auto":
+                self.__history_manager.add_messages(result_messages)
                 return self.__call_openai(call_context)
 
         if call_context.openai_kwargs.stream:
@@ -286,13 +299,13 @@ class JAImsAgent:
         self.__last_run_expense[expense.gpt_model.string].add_from(expense)
         self.__expense[expense.gpt_model.string].add_from(expense)
 
-    def get_openai_responses(self) -> List[dict]:
+    def get_openai_responses(self) -> List[Any]:
         """
         Returns the list of raw responses from OpenAI.
         """
         return self.__openai_responses
 
-    def get_openai_last_run_responses(self) -> List[dict]:
+    def get_openai_last_run_responses(self) -> List[Any]:
         """
         Returns the list of raw responses from OpenAI for the last run of the agent.
         """
@@ -316,11 +329,28 @@ class JAImsAgent:
             if expense.total_tokens > 0
         ]
 
-    def get_history(self, optimized: bool = False):
+    def get_run_history(
+        self,
+        override_options: Optional[JAImsOptions] = None,
+        override_openai_kwargs: Optional[JAImsOpenaiKWArgs] = None,
+    ):
         """
-        Returns the current history of the agent.
+        Returns the history that will be sent given the current options and openai kwargs to openai for a run.
         """
-        return self.__history_manager.get_history(optimized=optimized)
+        options = override_options or self.__options
+        openai_kwargs = override_openai_kwargs or self.__openai_kwargs
+
+        messages = self.__history_manager.get_messages_for_current_run(
+            options, openai_kwargs
+        )
+        return messages
+
+    def get_history(self):
+        """
+        Returns the complete history of the agent.
+        """
+
+        return self.__history_manager.get_history()
 
     @staticmethod
     def __init_expense_dictionary():
@@ -337,7 +367,7 @@ class JAImsAgent:
         }
 
     @staticmethod
-    def __merge_message_deltas(current: dict, delta: dict) -> dict:
+    def __merge_message_deltas(current: dict, delta: Any) -> dict:
         """Merges new delta into the accumulated one."""
         for key, value in delta.items():
             if key in current:
@@ -347,6 +377,17 @@ class JAImsAgent:
                     current[key] = JAImsAgent.__merge_message_deltas(
                         current.get(key, {}), value
                     )
+                elif isinstance(value, list):
+                    if isinstance(current[key], list):
+                        for i, item in enumerate(value):
+                            if isinstance(item, dict):
+                                current[key][i] = JAImsAgent.__merge_message_deltas(
+                                    current[key][i], item
+                                )
+                            else:
+                                current[key].append(item)
+                    else:
+                        current[key] = value
             else:
                 current[key] = value
 

@@ -8,7 +8,7 @@ from jaims.openai_wrappers import (
 from jaims.exceptions import JAImsTokensLimitExceeded
 import json
 
-from jaims.function_handler import parse_functions_to_json
+from jaims.function_handler import parse_function_wrappers_to_tools
 
 
 class HistoryManager:
@@ -65,20 +65,16 @@ class HistoryManager:
                 "All messages must be dicts, conforming to OpenAI API specification."
             )
 
-        keys = {"role", "content", "name"}
-        parsed = [
-            {k: v for k, v in message.items() if k in keys} for message in messages
-        ]
+        # this workaround is necessary because openai made a mess
+        # with the new return types of the openai api, that were just a plain dictionary before and
+        # now are a thousand classes often identical to each other.
+        # I'm adding content because when I do the model_dump() of the model, None values are skipped
+        # but "content" must be passed to none otherwise the api breaks.
+        for message in messages:
+            if "content" not in message:
+                message["content"] = None
 
-        for message, parsed_message in zip(messages, parsed):
-            if "function_call" in message:
-                function_call = message["function_call"]
-                parsed_message["function_call"] = {
-                    "name": function_call["name"],
-                    "arguments": function_call["arguments"],
-                }
-
-        self.__history.extend(parsed)
+        self.__history.extend(messages)
 
     def get_messages_for_current_run(
         self,
@@ -152,7 +148,7 @@ class HistoryManager:
 
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens
-        json_functions = parse_functions_to_json(openai_kwargs.functions or [])
+        json_functions = parse_function_wrappers_to_tools(openai_kwargs.tools or [])
         leading_prompts = options.leading_prompts or []
         trailing_prompts = options.trailing_prompts or []
         compound_history = (
