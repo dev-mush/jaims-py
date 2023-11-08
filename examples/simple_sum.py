@@ -3,7 +3,7 @@ from jaims import (
     JAImsFuncWrapper,
     JAImsParamDescriptor,
     JAImsJsonSchemaType,
-    JAImsGPTModel,
+    JAImsOpenaiKWArgs,
 )
 
 
@@ -55,8 +55,9 @@ def main():
     )
 
     agent = JAImsAgent(
-        functions=[sum_func_wrapper, result_func_wrapper],
-        model=JAImsGPTModel.GPT_3_5_TURBO_16K,
+        openai_kwargs=JAImsOpenaiKWArgs(
+            stream=stream, functions=[sum_func_wrapper, result_func_wrapper]
+        )
     )
 
     print("Hello, I am JAIms, your personal assistant.")
@@ -67,7 +68,6 @@ def main():
             break
         response = agent.run(
             [{"role": "user", "content": user_input}],
-            stream=stream,
         )
 
         if response:

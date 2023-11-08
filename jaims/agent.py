@@ -119,10 +119,7 @@ class JAImsAgent:
         self.__expense = JAImsAgent.__init_expense_dictionary()
         self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
         self.__function_handler = JAImsFunctionHandler()
-        self.__history_manager = HistoryManager(
-            openai_kwargs=self.__openai_kwargs,
-            options=self.__options,
-        )
+        self.__history_manager = HistoryManager()
         self.__openai_last_run_responses = []
         self.__openai_responses = []
 
@@ -168,7 +165,10 @@ class JAImsAgent:
                 the response object
         """
 
-        messages = override_openai_kwargs.messages or messages or []
+        messages = messages or []
+        if override_openai_kwargs:
+            messages = override_openai_kwargs.messages
+
         self.__history_manager.add_messages(messages)
         options = override_options or self.__options
         openai_kwargs = override_openai_kwargs or self.__openai_kwargs
@@ -211,7 +211,7 @@ class JAImsAgent:
                 message_delta = response_delta["choices"][0]["delta"]
                 message = JAImsAgent.__merge_message_deltas(message, message_delta)
 
-                if call_context.call_options.debug:
+                if call_context.call_options.debug_stream_function_call:
                     print(
                         message_delta["function_call"]["arguments"], end="", flush=True
                     )
@@ -259,13 +259,14 @@ class JAImsAgent:
     def __handle_token_expense_from_openai_response(
         self, response, call_context: JAImsCallContext
     ):
-        if call_context.openai_kwargs.stream:
+        if not call_context.openai_kwargs.stream:
             expense = JAImsTokensExpense.from_openai_usage_dictionary(
                 call_context.openai_kwargs.model, response["usage"]
             )
         else:
             sent_messages = self.__history_manager.get_messages_for_current_run(
-                agent_max_tokens=call_context.openai_kwargs.max_tokens,
+                options=call_context.call_options,
+                openai_kwargs=call_context.openai_kwargs,
             )
             prompt_tokens = estimate_token_count(
                 json.dumps(sent_messages), model=call_context.openai_kwargs.model

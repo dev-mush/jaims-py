@@ -153,14 +153,20 @@ class HistoryManager:
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens
         json_functions = parse_functions_to_json(openai_kwargs.functions or [])
-        compound_history = options.initial_prompts + history_buffer + (json_functions)
+        leading_prompts = options.leading_prompts or []
+        trailing_prompts = options.trailing_prompts or []
+        compound_history = (
+            leading_prompts + history_buffer + (json_functions) + trailing_prompts
+        )
 
         # the max tokens to be used are the max tokens supported by the current
         # openai model minus the tokens to leave out for the response from openai
         context_max_tokens = openai_kwargs.model.max_tokens - openai_kwargs.max_tokens
 
         # calculate the tokens for the compound history
-        messages_tokens = self.__tokens_from_messages(compound_history)
+        messages_tokens = self.__tokens_from_messages(
+            compound_history, openai_kwargs.model
+        )
 
         if options.optimize_context:
             while messages_tokens > context_max_tokens:
@@ -177,7 +183,11 @@ class HistoryManager:
 
                 # Recalculating the tokens for the compound history
                 messages_tokens = self.__tokens_from_messages(
-                    options.initial_prompts + history_buffer + json_functions
+                    leading_prompts
+                    + history_buffer
+                    + json_functions
+                    + trailing_prompts,
+                    openai_kwargs.model,
                 )
         elif messages_tokens > context_max_tokens:
             raise JAImsTokensLimitExceeded(
@@ -187,7 +197,7 @@ class HistoryManager:
                 has_optimized=False,
             )
 
-        llm_messages = options.initial_prompts + history_buffer
+        llm_messages = leading_prompts + history_buffer + trailing_prompts
 
         return llm_messages
 
@@ -200,6 +210,6 @@ class HistoryManager:
     def get_history(self):
         return self.__history
 
-    def __tokens_from_messages(self, messages: List):
+    def __tokens_from_messages(self, messages: List, model):
         """Returns the number of tokens used by a list of messages."""
-        return estimate_token_count(json.dumps(messages), self.model)
+        return estimate_token_count(json.dumps(messages), model)

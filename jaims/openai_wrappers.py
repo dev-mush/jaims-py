@@ -193,10 +193,12 @@ class JAImsOpenaiKWArgs:
             "seed": self.seed,
             "frequency_penalty": self.frequency_penalty,
             "presence_penalty": self.presence_penalty,
-            "logit_bias": self.logit_bias,
             "response_format": self.response_format,
             "stop": self.stop,
         }
+
+        if self.logit_bias:
+            kwargs["logit_bias"] = self.logit_bias
 
         if self.functions:
             kwargs["functions"] = parse_functions_to_json(self.functions)
@@ -208,7 +210,8 @@ class JAImsOpenaiKWArgs:
 class JAImsOptions:
     def __init__(
         self,
-        initial_prompts: Optional[List[Dict]] = None,
+        leading_prompts: Optional[List[Dict]] = None,
+        trailing_prompts: Optional[List[Dict]] = None,
         max_consecutive_function_calls: int = MAX_CONSECUTIVE_CALLS,
         optimize_context: bool = True,
         last_n_turns: Optional[int] = None,
@@ -220,7 +223,8 @@ class JAImsOptions:
         jitter: bool = True,
         debug_stream_function_call=False,
     ):
-        self.initial_prompts = initial_prompts
+        self.leading_prompts = leading_prompts
+        self.trailing_prompts = trailing_prompts
         self.max_consecutive_function_calls = max_consecutive_function_calls
         self.optimize_context = optimize_context
         self.last_n_turns = last_n_turns
@@ -230,6 +234,7 @@ class JAImsOptions:
         self.exponential_delay = exponential_delay
         self.exponential_cap = exponential_cap
         self.jitter = jitter
+        self.debug_stream_function_call = debug_stream_function_call
 
 
 def get_openai_response(
@@ -246,7 +251,7 @@ def get_openai_response(
     while retries < call_options.max_retries:
         try:
             response = openai.ChatCompletion.create(
-                openai_kw_args.to_dict(),
+                **openai_kw_args.to_dict(),
             )
 
             return response
