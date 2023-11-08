@@ -6,9 +6,12 @@ from typing import Any, List, Optional, Dict, Union
 import openai
 import tiktoken
 import logging
+import random
+
+from jaims.function_handler import JAImsFuncWrapper, parse_functions_to_json
 
 DEFAULT_MAX_TOKENS = 512
-MAX_CONSECUTIVE_CALLS = 5
+MAX_CONSECUTIVE_CALLS = 10
 
 
 class JAImsGPTModel(Enum):
@@ -18,9 +21,15 @@ class JAImsGPTModel(Enum):
     gpt-3.5-turbo-0613, gpt-3-5-turbo-16k-0613, gpt-4-0613
     """
 
-    GPT_3_5_TURBO = ("gpt-3.5-turbo-0613", 4096, 0.0015, 0.002)
-    GPT_3_5_TURBO_16K = ("gpt-3.5-turbo-16k-0613", 16384, 0.003, 0.004)
-    GPT_4 = ("gpt-4-0613", 8192, 0.03, 0.06)
+    GPT_3_5_TURBO = ("gpt-3.5-turbo", 4096, 0.0015, 0.002)
+    GPT_3_5_TURBO_16K = ("gpt-3.5-turbo-16k", 16384, 0.003, 0.004)
+    GPT_3_5_TURBO_0613 = ("gpt-3.5-turbo-0613", 4096, 0.0015, 0.002)
+    GPT_3_5_TURBO_16K_0613 = ("gpt-3.5-turbo-16k-0613", 16384, 0.003, 0.004)
+    GPT_3_5_TURBO_1106 = ("gpt-3.5-turbo-1106", 16385, 0.001, 0.002)
+    GPT_4 = ("gpt-4", 8192, 0.03, 0.06)
+    GPT_4_0613 = ("gpt-4-0613", 8192, 0.03, 0.06)
+    GPT_4_1106_PREVIEW = ("gpt-4-1106-preview", 128000, 0.01, 0.03)
+    GPT_4_1106_VISION_PREVIEW = ("gpt-4-1106-vision-preview", 128000, 0.01, 0.03)
 
     def __init__(self, string, max_tokens, price_1k_tokens_in, price_1k_tokens_out):
         self.string = string
@@ -112,61 +121,162 @@ def estimate_token_count(string: str, model: JAImsGPTModel) -> int:
     return num_tokens
 
 
+class ErrorHandlingMethod(Enum):
+    FAIL = "fail"
+    RETRY = "retry"
+    EXPONENTIAL_BACKOFF = "exponential_backoff"
+
+
+def __handle_openai_error(error: openai.OpenAIError) -> ErrorHandlingMethod:
+    # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
+    # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
+    error_handling_map = {
+        openai.error.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
+        openai.error.ServiceUnavailableError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
+        openai.error.APIError: ErrorHandlingMethod.RETRY,
+        openai.error.TryAgain: ErrorHandlingMethod.RETRY,
+        openai.error.Timeout: ErrorHandlingMethod.RETRY,
+        openai.error.APIConnectionError: ErrorHandlingMethod.RETRY,
+    }
+
+    for error_type, error_handling_method in error_handling_map.items():
+        if isinstance(error, error_type):
+            return error_handling_method
+
+    return ErrorHandlingMethod.FAIL
+
+
+class JAImsOpenaiKWArgs:
+    def __init__(
+        self,
+        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
+        messages: List[str] = [],
+        max_tokens: int = DEFAULT_MAX_TOKENS,
+        stream: bool = False,
+        temperature: float = 0.0,
+        top_p: Optional[int] = None,
+        n: int = 1,
+        seed: Optional[int] = None,
+        frequency_penalty: float = 0.0,
+        presence_penalty: float = 0.0,
+        logit_bias: Optional[Dict[str, float]] = None,
+        response_format: Optional[Dict] = None,
+        stop: Union[Optional[str], Optional[List[str]]] = None,
+        function_call: Union[str, Dict] = "auto",
+        functions: Optional[List[JAImsFuncWrapper]] = None,
+    ):
+        self.model = model
+        self.messages = messages
+        self.max_tokens = max_tokens
+        self.stream = stream
+        self.temperature = temperature
+        self.top_p = top_p
+        self.n = n
+        self.seed = seed
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
+        self.logit_bias = logit_bias
+        self.response_format = response_format
+        self.stop = stop
+        self.function_call = function_call
+        self.functions = functions
+
+    def to_dict(self):
+        kwargs = {
+            "model": self.model.string,
+            "temperature": self.temperature,
+            "n": self.n,
+            "stream": self.stream,
+            "messages": self.messages,
+            "top_p": self.top_p,
+            "max_tokens": self.max_tokens,
+            "seed": self.seed,
+            "frequency_penalty": self.frequency_penalty,
+            "presence_penalty": self.presence_penalty,
+            "logit_bias": self.logit_bias,
+            "response_format": self.response_format,
+            "stop": self.stop,
+        }
+
+        if self.functions:
+            kwargs["functions"] = parse_functions_to_json(self.functions)
+            kwargs["function_call"] = self.function_call
+
+        return kwargs
+
+
+class JAImsOptions:
+    def __init__(
+        self,
+        initial_prompts: Optional[List[Dict]] = None,
+        max_consecutive_function_calls: int = MAX_CONSECUTIVE_CALLS,
+        optimize_context: bool = True,
+        last_n_turns: Optional[int] = None,
+        max_retries=15,
+        retry_delay=10,
+        exponential_base: int = 2,
+        exponential_delay: int = 1,
+        exponential_cap: Optional[int] = None,
+        jitter: bool = True,
+        debug_stream_function_call=False,
+    ):
+        self.initial_prompts = initial_prompts
+        self.max_consecutive_function_calls = max_consecutive_function_calls
+        self.optimize_context = optimize_context
+        self.last_n_turns = last_n_turns
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+        self.exponential_base = exponential_base
+        self.exponential_delay = exponential_delay
+        self.exponential_cap = exponential_cap
+        self.jitter = jitter
+
+
 def get_openai_response(
-    messages,
-    model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
-    max_tokens: int = DEFAULT_MAX_TOKENS,
-    stream: bool = False,
-    temperature: float = 0.0,
-    top_p: Optional[int] = None,
-    n: int = 1,
-    function_call: Union[str, Dict] = "auto",
-    functions: Optional[List[Dict[str, Any]]] = None,
-    max_retries=15,
-    delay=10,
+    openai_kw_args: JAImsOpenaiKWArgs,
+    call_options: JAImsOptions,
 ):
     retries = 0
     logger = logging.getLogger(__name__)
+    # keeps how long to sleep between retries
+    sleep_time = call_options.retry_delay
+    # keeps track of the exponential backoff
+    backoff_time = call_options.exponential_delay
 
-    kwargs = {
-        "model": model.string,
-        "temperature": temperature,
-        "n": n,
-        "stream": stream,
-        "messages": messages,
-        "top_p": top_p,
-        "max_tokens": max_tokens,
-    }
-
-    if functions:
-        kwargs["functions"] = functions
-        kwargs["function_call"] = function_call
-        logger.info("Using functions")
-        logger.debug(f"Function call:\n{kwargs['function_call']}")
-        logger.debug(kwargs["functions"])
-
-    while retries < max_retries:
+    while retries < call_options.max_retries:
         try:
             response = openai.ChatCompletion.create(
-                **kwargs,
+                openai_kw_args.to_dict(),
             )
 
             return response
         except openai.OpenAIError as error:
-            logger.error(f"OpenAI API error code: {error.code}")
             logger.error(f"OpenAI API error:\n{error}\n")
+            error_handling_method = __handle_openai_error(error)
 
-            # check if error contains the string "Rate limit"
-            if "rate limit" in str(error).lower():
-                logger.warning(f"Retrying in 15 seconds...")
-                time.sleep(15)
-            else:
-                logger.warning(f"Retrying in {delay} seconds...")
-                time.sleep(delay)
+            if error_handling_method == ErrorHandlingMethod.FAIL:
+                raise Exception(f"OpenAI API error: {error}")
+
+            if error_handling_method == ErrorHandlingMethod.RETRY:
+                sleep_time = call_options.retry_delay
+
+            elif error_handling_method == ErrorHandlingMethod.EXPONENTIAL_BACKOFF:
+                logger.info(f"Performing exponential backoff")
+                jitter = 1 + jitter * random.random()
+                backoff_time = backoff_time * call_options.exponential_base * jitter
+
+                if (
+                    call_options.exponential_cap is not None
+                    and backoff_time > call_options.exponential_cap
+                ):
+                    backoff_time = call_options.exponential_cap * jitter
+
+                sleep_time = backoff_time
+
+            logger.warning(f"Retrying in {sleep_time} seconds")
+            time.sleep(sleep_time)
             retries += 1
 
-    max_retries_error = (
-        f"Max retries exceeded! OpenAI API call failed {max_retries} times."
-    )
+    max_retries_error = f"Max retries exceeded! OpenAI API call failed {call_options.max_retries} times."
     logger.error(max_retries_error)
     raise Exception(max_retries_error)
