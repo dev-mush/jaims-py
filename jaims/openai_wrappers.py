@@ -9,6 +9,7 @@ from openai import Stream
 import tiktoken
 import logging
 import random
+import json
 
 from jaims.function_handler import JAImsFuncWrapper, parse_function_wrappers_to_tools
 
@@ -246,6 +247,8 @@ def get_openai_response(
     sleep_time = call_options.retry_delay
     # keeps track of the exponential backoff
     backoff_time = call_options.exponential_delay
+
+    # print(json.dumps(openai_kw_args.messages, indent=4))
 
     while retries < call_options.max_retries:
         try:

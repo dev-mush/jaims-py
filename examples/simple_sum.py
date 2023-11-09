@@ -4,6 +4,7 @@ from jaims import (
     JAImsParamDescriptor,
     JAImsJsonSchemaType,
     JAImsOpenaiKWArgs,
+    JAImsGPTModel,
 )
 
 
@@ -100,6 +101,7 @@ def main():
 
     agent = JAImsAgent(
         openai_kwargs=JAImsOpenaiKWArgs(
+            model=JAImsGPTModel.GPT_4_1106_PREVIEW,
             stream=stream,
             tools=[
                 sum_func_wrapper,

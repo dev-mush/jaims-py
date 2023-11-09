@@ -193,7 +193,6 @@ class JAImsFunctionHandler:
             UnexpectedFunctionCallException
                 if the function name is not found in the functions list
         """
-        # TODO: handle tool_calls none values
         tool_calls = message.get("tool_calls", [])
         function_calls = []
         for tool_call in tool_calls:
@@ -225,15 +224,25 @@ class JAImsFunctionHandler:
             if not function_wrapper:
                 raise JAImsUnexpectedFunctionCall(function_name)
 
-            fc_result = function_wrapper.function(**fc["args"])
-            results.append(
-                {
-                    "name": function_name,
-                    "tool_call_id": fc["tool_call_id"],
-                    "role": "tool",
-                    "content": json.dumps(fc_result),
-                }
-            )
+            try:
+                fc_result = function_wrapper.function(**fc["args"])
+                results.append(
+                    {
+                        "name": function_name,
+                        "tool_call_id": fc["tool_call_id"],
+                        "role": "tool",
+                        "content": json.dumps(fc_result),
+                    }
+                )
+            except TypeError as e:
+                results.append(
+                    {
+                        "name": function_name,
+                        "tool_call_id": fc["tool_call_id"],
+                        "role": "tool",
+                        "content": json.dumps({"error": str(e)}),
+                    }
+                )
 
         # If the name of the current function matches the provided name
         # Call the function and return its result

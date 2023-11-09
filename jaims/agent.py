@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Any, Dict, Generator, List, Optional, Union
+from typing import Any, Generator, List, Optional, Union
 
 import openai
 from openai.types.chat import ChatCompletionChunk, ChatCompletion
@@ -209,24 +209,18 @@ class JAImsAgent:
         response: openai.Stream[ChatCompletionChunk],
         call_context: JAImsCallContext,
     ) -> Generator[str, None, None]:
-        accumulated_chunks = {}
+        accumulated_chunks = None
         for response_chunk in response:
             if len(response_chunk.choices) > 0:
                 # check content exists
                 message_delta = response_chunk.choices[0].delta
-                accumulated_chunks = JAImsAgent.__merge_message_deltas(
-                    accumulated_chunks, message_delta.model_dump(exclude_none=True)
+                accumulated_chunks = JAImsAgent.accumulate_choice_delta(
+                    accumulated_chunks, message_delta
                 )
 
-                # if call_context.call_options.debug_stream_function_call:
-                #     print(
-                #         message_delta["function_call"]["arguments"], end="", flush=True
-                #     )
-
                 if response_chunk.choices[0].finish_reason is not None:
-                    # log token expense
                     self.__handle_token_expense_from_openai_response(
-                        accumulated_chunks, call_context
+                        accumulated_chunks.model_dump(), call_context
                     )
 
                     yield from self.__handle_response_message(
@@ -251,13 +245,15 @@ class JAImsAgent:
         return self.__handle_response_message(message, call_context)
 
     def __handle_response_message(self, message, call_context: JAImsCallContext):
-        self.__history_manager.add_messages([message])
         logger = logging.getLogger(__name__)
         logger.debug(f"OpenAI response:\n{message}")
 
-        if "tool_calls" in message:
+        message_dict = message.model_dump(exclude_none=True)
+        self.__history_manager.add_messages([message_dict])
+
+        if message.tool_calls:
             result_messages = self.__function_handler.handle_from_message(
-                message=message,
+                message=message_dict,
                 functions=call_context.openai_kwargs.tools or [],
             )
             if call_context.openai_kwargs.tool_choice == "auto":
@@ -354,41 +350,62 @@ class JAImsAgent:
 
     @staticmethod
     def __init_expense_dictionary():
-        return {
-            JAImsGPTModel.GPT_3_5_TURBO.string: JAImsTokensExpense(
-                gpt_model=JAImsGPTModel.GPT_3_5_TURBO
-            ),
-            JAImsGPTModel.GPT_3_5_TURBO_16K.string: JAImsTokensExpense(
-                gpt_model=JAImsGPTModel.GPT_3_5_TURBO_16K
-            ),
-            JAImsGPTModel.GPT_4.string: JAImsTokensExpense(
-                gpt_model=JAImsGPTModel.GPT_4
-            ),
-        }
+        dict = {}
+        for gpt in JAImsGPTModel:
+            dict[gpt.string] = JAImsTokensExpense(gpt_model=gpt)
+
+        return dict
 
     @staticmethod
-    def __merge_message_deltas(current: dict, delta: Any) -> dict:
-        """Merges new delta into the accumulated one."""
-        for key, value in delta.items():
-            if key in current:
-                if isinstance(value, str):
-                    current[key] += value
-                elif isinstance(value, dict):
-                    current[key] = JAImsAgent.__merge_message_deltas(
-                        current.get(key, {}), value
-                    )
-                elif isinstance(value, list):
-                    if isinstance(current[key], list):
-                        for i, item in enumerate(value):
-                            if isinstance(item, dict):
-                                current[key][i] = JAImsAgent.__merge_message_deltas(
-                                    current[key][i], item
-                                )
-                            else:
-                                current[key].append(item)
-                    else:
-                        current[key] = value
-            else:
-                current[key] = value
+    def merge_tool_calls(existing_tool_calls, new_tool_calls_delta):
+        if not existing_tool_calls:
+            return new_tool_calls_delta
 
-        return current
+        new_tool_calls = existing_tool_calls[:]
+        for new_call_delta in new_tool_calls_delta:
+            existing_call = next(
+                (item for item in new_tool_calls if item.index == new_call_delta.index),
+                None,
+            )
+            if not existing_call:
+                new_tool_calls.append(new_call_delta)
+            else:
+                if (
+                    existing_call.type != new_call_delta.type
+                    and new_call_delta.type is not None
+                ):
+                    existing_call.type = new_call_delta.type
+                if (
+                    existing_call.id != new_call_delta.id
+                    and new_call_delta.id is not None
+                ):
+                    existing_call.id = new_call_delta.id
+                if existing_call.function is None:
+                    existing_call.function = new_call_delta.function
+                else:
+                    if (
+                        existing_call.function.name != new_call_delta.function.name
+                        and new_call_delta.function.name is not None
+                    ):
+                        existing_call.function.name = new_call_delta.function.name
+                    existing_call.function.arguments = (
+                        existing_call.function.arguments or ""
+                    ) + (new_call_delta.function.arguments or "")
+
+        return new_tool_calls
+
+    @staticmethod
+    def accumulate_choice_delta(accumulator, new_delta):
+        if accumulator is None:
+            return new_delta
+
+        if new_delta.content:
+            accumulator.content = (accumulator.content or "") + new_delta.content
+        if new_delta.role:
+            accumulator.role = (accumulator.role or "") + new_delta.role
+        if new_delta.tool_calls:
+            accumulator.tool_calls = JAImsAgent.merge_tool_calls(
+                accumulator.tool_calls, new_delta.tool_calls
+            )
+
+        return accumulator
