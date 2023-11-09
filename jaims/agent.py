@@ -214,7 +214,7 @@ class JAImsAgent:
             if len(response_chunk.choices) > 0:
                 # check content exists
                 message_delta = response_chunk.choices[0].delta
-                accumulated_chunks = JAImsAgent.accumulate_choice_delta(
+                accumulated_chunks = JAImsAgent.__accumulate_choice_delta(
                     accumulated_chunks, message_delta
                 )
 
@@ -241,7 +241,7 @@ class JAImsAgent:
             response.model_dump(), call_context
         )
 
-        message = response.choices[0].message.model_dump()
+        message = response.choices[0].message
         return self.__handle_response_message(message, call_context)
 
     def __handle_response_message(self, message, call_context: JAImsCallContext):
@@ -263,7 +263,7 @@ class JAImsAgent:
         if call_context.openai_kwargs.stream:
             return ""
 
-        return message["content"]
+        return message.content or ""
 
     def __handle_token_expense_from_openai_response(
         self, response, call_context: JAImsCallContext
@@ -357,7 +357,7 @@ class JAImsAgent:
         return dict
 
     @staticmethod
-    def merge_tool_calls(existing_tool_calls, new_tool_calls_delta):
+    def __merge_tool_calls(existing_tool_calls, new_tool_calls_delta):
         if not existing_tool_calls:
             return new_tool_calls_delta
 
@@ -395,7 +395,7 @@ class JAImsAgent:
         return new_tool_calls
 
     @staticmethod
-    def accumulate_choice_delta(accumulator, new_delta):
+    def __accumulate_choice_delta(accumulator, new_delta):
         if accumulator is None:
             return new_delta
 
@@ -404,7 +404,7 @@ class JAImsAgent:
         if new_delta.role:
             accumulator.role = (accumulator.role or "") + new_delta.role
         if new_delta.tool_calls:
-            accumulator.tool_calls = JAImsAgent.merge_tool_calls(
+            accumulator.tool_calls = JAImsAgent.__merge_tool_calls(
                 accumulator.tool_calls, new_delta.tool_calls
             )
 
