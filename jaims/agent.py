@@ -215,7 +215,23 @@ class JAImsAgent:
                     accumulated_chunks, message_delta
                 )
 
+                if (
+                    call_context.options.debug_stream_function_call
+                    and message_delta.tool_calls
+                ):
+                    print(
+                        message_delta.tool_calls[0].function.arguments,  # type: ignore
+                        flush=True,
+                        end="",
+                    )
+
                 if completion_chunk.choices[0].finish_reason is not None:
+                    if (
+                        call_context.options.debug_stream_function_call
+                        and accumulated_chunks.tool_calls
+                    ):
+                        print("\n")
+
                     # rebuilding entire completion chunk with accumulated delta
                     completion_chunk.choices[0].delta = accumulated_chunks
                     self.__store_transaction(call_context, completion_chunk)
