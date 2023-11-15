@@ -3,6 +3,10 @@ import logging
 import os
 from typing import Any, Generator, List, Optional, Union
 
+from jaims.transaction_storage import (
+    JAImsTransactionStorageInterface,
+)
+
 import openai
 from openai.types.chat import ChatCompletionChunk, ChatCompletion
 
@@ -29,18 +33,18 @@ class JAImsCallContext:
     def __init__(
         self,
         openai_kwargs: JAImsOpenaiKWArgs,
-        call_options: JAImsOptions,
+        options: JAImsOptions,
         iterations: int = 0,
     ):
         self.openai_kwargs = openai_kwargs
-        self.call_options = call_options
+        self.options = options
         self.iterations = iterations
 
     def add_iteration(self):
         self.iterations += 1
-        if self.iterations > self.call_options.max_consecutive_function_calls:
+        if self.iterations > self.options.max_consecutive_function_calls:
             raise JAImsMaxConsecutiveFunctionCallsExceeded(
-                f"Max consecutive function calls exceeded ({self.call_options.max_consecutive_function_calls})"
+                f"Max consecutive function calls exceeded ({self.options.max_consecutive_function_calls})"
             )
 
 
@@ -109,6 +113,7 @@ class JAImsAgent:
         openai_kwargs: JAImsOpenaiKWArgs = JAImsOpenaiKWArgs(),
         options: JAImsOptions = JAImsOptions(),
         openai_api_key: Optional[str] = None,
+        transaction_storage: JAImsTransactionStorageInterface = JAImsTransactionStorageInterface(),
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
@@ -121,8 +126,7 @@ class JAImsAgent:
         self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
         self.__function_handler = JAImsFunctionHandler()
         self.__history_manager = HistoryManager()
-        self.__openai_last_run_responses = []
-        self.__openai_responses = []
+        self.__transaction_storage = transaction_storage
 
     def run(
         self,
@@ -175,7 +179,6 @@ class JAImsAgent:
         openai_kwargs = override_openai_kwargs or self.__openai_kwargs
         call_context = JAImsCallContext(openai_kwargs, options)
 
-        self.__openai_last_run_responses = []
         self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
         return self.__call_openai(call_context)
 
@@ -185,40 +188,38 @@ class JAImsAgent:
         # throws if max consecutive calls is exceeded
         call_context.add_iteration()
         messages = self.__history_manager.get_messages_for_current_run(
-            options=call_context.call_options,
+            options=call_context.options,
             openai_kwargs=call_context.openai_kwargs,
         )
 
         call_context.openai_kwargs.messages = messages
 
-        response = get_openai_response(
-            call_context.openai_kwargs, call_context.call_options
-        )
-        self.__openai_last_run_responses.append(response)
-        self.__openai_responses.append(response)
+        response = get_openai_response(call_context.openai_kwargs, call_context.options)
 
         if isinstance(response, openai.Stream):
-            return self.__receive_and_yield_chat_completion_chunk_response(
-                response, call_context
-            )
+            return self.__handle_streaming_response(response, call_context)
         else:
-            return self.__receive_chat_completion_response(response, call_context)
+            return self.__handle_response(response, call_context)
 
-    def __receive_and_yield_chat_completion_chunk_response(
+    def __handle_streaming_response(
         self,
         response: openai.Stream[ChatCompletionChunk],
         call_context: JAImsCallContext,
     ) -> Generator[str, None, None]:
         accumulated_chunks = None
-        for response_chunk in response:
-            if len(response_chunk.choices) > 0:
+        for completion_chunk in response:
+            if len(completion_chunk.choices) > 0:
                 # check content exists
-                message_delta = response_chunk.choices[0].delta
+                message_delta = completion_chunk.choices[0].delta
                 accumulated_chunks = JAImsAgent.__accumulate_choice_delta(
                     accumulated_chunks, message_delta
                 )
 
-                if response_chunk.choices[0].finish_reason is not None:
+                if completion_chunk.choices[0].finish_reason is not None:
+                    # rebuilding entire completion chunk with accumulated delta
+                    completion_chunk.choices[0].delta = accumulated_chunks
+                    self.__store_transaction(call_context, completion_chunk)
+
                     self.__handle_token_expense_from_openai_response(
                         accumulated_chunks.model_dump(), call_context
                     )
@@ -230,7 +231,7 @@ class JAImsAgent:
                 if message_delta.content:
                     yield message_delta.content
 
-    def __receive_chat_completion_response(
+    def __handle_response(
         self, response: ChatCompletion, call_context: JAImsCallContext
     ):
         if len(response.choices) == 0:
@@ -241,12 +242,14 @@ class JAImsAgent:
             response.model_dump(), call_context
         )
 
+        self.__store_transaction(call_context, response)
+
         message = response.choices[0].message
         return self.__handle_response_message(message, call_context)
 
     def __handle_response_message(self, message, call_context: JAImsCallContext):
         logger = logging.getLogger(__name__)
-        logger.debug(f"OpenAI response:\n{message}")
+        logger.debug(f"OpenAI response message:\n{message}")
 
         message_dict = message.model_dump(exclude_none=True)
         self.__history_manager.add_messages([message_dict])
@@ -260,10 +263,17 @@ class JAImsAgent:
                 self.__history_manager.add_messages(result_messages)
                 return self.__call_openai(call_context)
 
-        if call_context.openai_kwargs.stream:
-            return ""
-
         return message.content or ""
+
+    def __store_transaction(
+        self,
+        call_context: JAImsCallContext,
+        response: Union[ChatCompletion, ChatCompletionChunk],
+    ):
+        self.__transaction_storage.store_transaction(
+            request=call_context.openai_kwargs.to_dict(),
+            response=response.model_dump(exclude_none=True),
+        )
 
     def __handle_token_expense_from_openai_response(
         self, response, call_context: JAImsCallContext
@@ -274,7 +284,7 @@ class JAImsAgent:
             )
         else:
             sent_messages = self.__history_manager.get_messages_for_current_run(
-                options=call_context.call_options,
+                options=call_context.options,
                 openai_kwargs=call_context.openai_kwargs,
             )
             prompt_tokens = estimate_token_count(
@@ -294,18 +304,6 @@ class JAImsAgent:
 
         self.__last_run_expense[expense.gpt_model.string].add_from(expense)
         self.__expense[expense.gpt_model.string].add_from(expense)
-
-    def get_openai_responses(self) -> List[Any]:
-        """
-        Returns the list of raw responses from OpenAI.
-        """
-        return self.__openai_responses
-
-    def get_openai_last_run_responses(self) -> List[Any]:
-        """
-        Returns the list of raw responses from OpenAI for the last run of the agent.
-        """
-        return self.__openai_last_run_responses
 
     def get_expenses(self):
         """

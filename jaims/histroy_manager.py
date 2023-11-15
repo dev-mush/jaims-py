@@ -143,8 +143,8 @@ class HistoryManager:
         history_buffer = self.__history.copy()
 
         # If last_n_turns is set, only keep the last n messages
-        if options.last_n_turns is not None:
-            history_buffer = history_buffer[-options.last_n_turns :]
+        if options.message_history_size is not None:
+            history_buffer = history_buffer[-options.message_history_size :]
 
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens

@@ -1,3 +1,4 @@
+import json
 from jaims import (
     JAImsAgent,
     JAImsFuncWrapper,
@@ -5,6 +6,7 @@ from jaims import (
     JAImsJsonSchemaType,
     JAImsOpenaiKWArgs,
     JAImsGPTModel,
+    JAImsTransactionStorageInterface,
 )
 
 
@@ -34,8 +36,17 @@ def store_multiply(result: int):
     print("-------------------")
 
 
+class MockTransactionStorage(JAImsTransactionStorageInterface):
+    def store_transaction(self, request: dict, response: dict):
+        print("----storing transaction----")
+        print(json.dumps(request, indent=4))
+        print("---------------------------")
+        print(json.dumps(response, indent=4))
+        print("---------------------------")
+
+
 def main():
-    stream = True
+    stream = False
 
     sum_func_wrapper = JAImsFuncWrapper(
         function=sum,
@@ -109,7 +120,8 @@ def main():
                 result_func_wrapper,
                 result_multiply_func_wrapper,
             ],
-        )
+        ),
+        transaction_storage=MockTransactionStorage(),
     )
 
     print("Hello, I am JAIms, your personal assistant.")

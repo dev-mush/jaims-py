@@ -214,7 +214,7 @@ class JAImsOptions:
         trailing_prompts: Optional[List[Dict]] = None,
         max_consecutive_function_calls: int = MAX_CONSECUTIVE_CALLS,
         optimize_context: bool = True,
-        last_n_turns: Optional[int] = None,
+        message_history_size: Optional[int] = None,
         max_retries=15,
         retry_delay=10,
         exponential_base: int = 2,
@@ -227,7 +227,7 @@ class JAImsOptions:
         self.trailing_prompts = trailing_prompts
         self.max_consecutive_function_calls = max_consecutive_function_calls
         self.optimize_context = optimize_context
-        self.last_n_turns = last_n_turns
+        self.message_history_size = message_history_size
         self.max_retries = max_retries
         self.retry_delay = retry_delay
         self.exponential_base = exponential_base
