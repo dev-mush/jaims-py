@@ -32,7 +32,7 @@ class JAImsGPTModel(Enum):
     GPT_4 = ("gpt-4", 8192, 0.03, 0.06)
     GPT_4_0613 = ("gpt-4-0613", 8192, 0.03, 0.06)
     GPT_4_1106_PREVIEW = ("gpt-4-1106-preview", 128000, 0.01, 0.03)
-    GPT_4_1106_VISION_PREVIEW = ("gpt-4-1106-vision-preview", 128000, 0.01, 0.03)
+    GPT_4_VISION_PREVIEW = ("gpt-4-vision-preview", 128000, 0.01, 0.03)
 
     def __init__(self, string, max_tokens, price_1k_tokens_in, price_1k_tokens_out):
         self.string = string
@@ -196,6 +196,8 @@ class JAImsOpenaiKWArgs:
             "response_format": self.response_format,
             "stop": self.stop,
         }
+
+        kwargs = {key: value for key, value in kwargs.items() if value is not None}
 
         if self.logit_bias:
             kwargs["logit_bias"] = self.logit_bias

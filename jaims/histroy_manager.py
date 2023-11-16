@@ -1,3 +1,4 @@
+from io import BytesIO
 from typing import List, Optional
 from jaims.openai_wrappers import (
     estimate_token_count,
@@ -9,6 +10,9 @@ from jaims.exceptions import JAImsTokensLimitExceeded
 import json
 
 from jaims.function_handler import parse_function_wrappers_to_tools
+from math import ceil
+import base64
+from PIL import Image
 
 
 class HistoryManager:
@@ -208,4 +212,48 @@ class HistoryManager:
 
     def __tokens_from_messages(self, messages: List, model):
         """Returns the number of tokens used by a list of messages."""
-        return estimate_token_count(json.dumps(messages), model)
+
+        images = []
+        parsed = []
+        for message in messages:
+            message_copy = message.copy()
+
+            if isinstance(message["content"], list):
+                filtered_content = []
+                for item in message["content"]:
+                    if (
+                        isinstance(item, dict)
+                        and item.get("image_url", None)
+                        and item["image_url"]["url"].startswith(
+                            "data:image/jpeg;base64,"
+                        )
+                    ):
+                        images.append(
+                            item["image_url"]["url"].replace(
+                                "data:image/jpeg;base64,", ""
+                            )
+                        )
+                    else:
+                        filtered_content.append(item)
+                message_copy["content"] = filtered_content
+            parsed.append(message_copy)
+
+        image_tokens = 0
+        for image in images:
+            width, height = self.__get_image_size_from_base64(image)
+            image_tokens += self.__count_image_tokens(width, height)
+
+        return estimate_token_count(json.dumps(parsed), model) + image_tokens
+
+    def __get_image_size_from_base64(self, base64_string):
+        image_data = base64.b64decode(base64_string)
+        image = Image.open(BytesIO(image_data))
+
+        return image.size
+
+    def __count_image_tokens(self, width: int, height: int):
+        h = ceil(height / 512)
+        w = ceil(width / 512)
+        n = w * h
+        total = 85 + 170 * n
+        return total
