@@ -279,7 +279,13 @@ class JAImsAgent:
                 self.__history_manager.add_messages(result_messages)
                 return self.__call_openai(call_context)
 
-        return message.content or ""
+        # if the response was streaming only an empty string must be returned
+        # because the streaming generator already yielded the response, otherwise
+        # the content is returned.
+        if call_context.openai_kwargs.stream:
+            return ""
+        else:
+            return message.content or ""
 
     def __store_transaction(
         self,
