@@ -218,7 +218,7 @@ class HistoryManager:
         for message in messages:
             message_copy = message.copy()
 
-            if isinstance(message["content"], list):
+            if isinstance(message.get("content", None), list):
                 filtered_content = []
                 for item in message["content"]:
                     if (
