@@ -6,7 +6,7 @@ with open("requirements.txt") as f:
 
 setup(
     name="jaims-py",
-    version="0.0.7",
+    version="1.0.0",
     packages=find_packages(),
     description="A Python package for creating simple AI Agents using the OpenAI API.",
     long_description=open("README.md").read(),

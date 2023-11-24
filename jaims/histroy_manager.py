@@ -1,65 +1,45 @@
+from io import BytesIO
 from typing import List, Optional
 from jaims.openai_wrappers import (
-    DEFAULT_MAX_TOKENS,
-    JAImsGPTModel,
     estimate_token_count,
+    JAImsOptions,
+    JAImsOpenaiKWArgs,
 )
 
 from jaims.exceptions import JAImsTokensLimitExceeded
 import json
 
-from jaims.function_handler import JAImsFuncWrapper, parse_functions_to_json
+from jaims.function_handler import parse_function_wrappers_to_tools
+from math import ceil
+import base64
+from PIL import Image
 
 
 class HistoryManager:
     """
-    Handles chat history of the agent.
+    Manages the history of messages sent to OpenAI.
+    The history manager stores the messages in memory and, when the agent is set to optimize the context,
+    it optimizes the history to fit the max tokens supported by the current llm model.
 
-    Attributes
+    Parameters
     ----------
-        model : GPTModel
-            the model to be used by the agent, defaults to gpt-3.5-turbo-0613
-        functions : list (optional)
-            the list of functions that can be called by the agent, used to compute token usage
-        initial_prompts: list (optional)
-            the list of initial prompts to be used by the agent, useful to compute token usage
-        last_n_turns: int (optional)
-            if set, specifies the n last messages to be sent, defaults to None
-
-    Methods
-    -------
-        add_messages(messages)
-            pushes a new message in the history
-        get_history() -> list
-            returns the history
-        clear_history()
-            clears the history
-        optimize_history()
-            optimizes history messages based on context constraints
-
-    Private Members
-    ----------------
-        __history : list
-            holds the current openai messages history. It's meant to be
-            manipulated only by the methods of this class.
+        history : list (optional)
+            the history of messages to be sent to openai
     """
 
     def __init__(
         self,
         history: Optional[List] = None,
-        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
-        mandatory_context: Optional[List] = None,
-        functions: Optional[List[JAImsFuncWrapper]] = None,
-        optimize_history: bool = True,
-        last_n_turns: Optional[int] = None,
     ):
+        """
+        Returns a new HistoryManager instance.
+
+        Parameters
+        ----------
+            history : list (optional)
+                the initial history of messages to be sent to openai
+        """
         self.__history = history or []
-        self.model = model
-        self.mandatory_context = mandatory_context or []
-        funcs_to_parse = functions or []
-        self.json_functions = parse_functions_to_json(funcs_to_parse)
-        self.optimize_history = optimize_history
-        self.last_n_turns = last_n_turns
 
     def add_messages(self, messages: List):
         """
@@ -76,37 +56,31 @@ class HistoryManager:
                 "All messages must be dicts, conforming to OpenAI API specification."
             )
 
-        keys = {"role", "content", "name"}
-        parsed = [
-            {k: v for k, v in message.items() if k in keys} for message in messages
-        ]
+        # this workaround is necessary because openai made a mess
+        # with the new return types of the openai api, that were just a plain dictionary before and
+        # now are a thousand classes often identical to each other.
+        # I'm adding content because when I do the model_dump() of the model, None values are skipped
+        # but "content" must be passed to none otherwise the api breaks.
+        for message in messages:
+            if "content" not in message:
+                message["content"] = None
 
-        for message, parsed_message in zip(messages, parsed):
-            if "function_call" in message:
-                function_call = message["function_call"]
-                parsed_message["function_call"] = {
-                    "name": function_call["name"],
-                    "arguments": function_call["arguments"],
-                }
+        self.__history.extend(messages)
 
-        self.__history.extend(parsed)
-
-    def get_optimised_messages(
+    def get_messages_for_current_run(
         self,
-        agent_max_tokens: int = DEFAULT_MAX_TOKENS,
+        options: JAImsOptions,
+        openai_kwargs: JAImsOpenaiKWArgs,
     ) -> List:
         """
-        Returns the history.
+        Returns the messages to be sent to openai for the current run.
 
         Parameters
         ----------
-            agent_max_tokens : int (optional)
-                the max tokens to leave out for the response from openai, defaults to DEFAULT_MAX_TOKENS
-
-        Returns
-        -------
-            list
-                the history of messages to be sent to openai
+            options : JAImsOptions
+                the options for the current run
+            openai_kwargs : JAImsOpenaiKWArgs
+                the openai kwargs for the current run
 
         Raises
         ------
@@ -145,38 +119,43 @@ class HistoryManager:
 
         MAYBE TODO:
         - it would be nice to have an auto-scale up of the context, for instance passing from the gpt-3.5-turbo 4k to the 16k model.
-
-
-
         """
+
+        if not options or not openai_kwargs:
+            raise ValueError("options and openai_kwargs must be provided.")
 
         # Copying the whole history to avoid altering the original one
         history_buffer = self.__history.copy()
 
         # If last_n_turns is set, only keep the last n messages
-        if self.last_n_turns is not None:
-            history_buffer = history_buffer[-self.last_n_turns :]
+        if options.message_history_size is not None:
+            history_buffer = history_buffer[-options.message_history_size :]
 
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens
+        json_functions = parse_function_wrappers_to_tools(openai_kwargs.tools or [])
+        leading_prompts = options.leading_prompts or []
+        trailing_prompts = options.trailing_prompts or []
         compound_history = (
-            self.mandatory_context + history_buffer + (self.json_functions)
+            leading_prompts + history_buffer + (json_functions) + trailing_prompts
         )
 
         # the max tokens to be used are the max tokens supported by the current
         # openai model minus the tokens to leave out for the response from openai
-        context_max_tokens = self.model.max_tokens - agent_max_tokens
+        context_max_tokens = openai_kwargs.model.max_tokens - openai_kwargs.max_tokens
 
         # calculate the tokens for the compound history
-        messages_tokens = self.__tokens_from_messages(compound_history)
+        messages_tokens = self.__tokens_from_messages(
+            compound_history, openai_kwargs.model
+        )
 
-        if self.optimize_history:
+        if options.optimize_context:
             while messages_tokens > context_max_tokens:
                 if not history_buffer:
                     raise JAImsTokensLimitExceeded(
-                        self.model.max_tokens,
+                        openai_kwargs.model.max_tokens,
                         messages_tokens,
-                        agent_max_tokens,
+                        openai_kwargs.max_tokens,
                         has_optimized=True,
                     )
 
@@ -185,17 +164,21 @@ class HistoryManager:
 
                 # Recalculating the tokens for the compound history
                 messages_tokens = self.__tokens_from_messages(
-                    self.mandatory_context + history_buffer + self.json_functions
+                    leading_prompts
+                    + history_buffer
+                    + json_functions
+                    + trailing_prompts,
+                    openai_kwargs.model,
                 )
         elif messages_tokens > context_max_tokens:
             raise JAImsTokensLimitExceeded(
-                self.model.max_tokens,
+                openai_kwargs.model.max_tokens,
                 messages_tokens,
-                agent_max_tokens,
+                openai_kwargs.max_tokens,
                 has_optimized=False,
             )
 
-        llm_messages = self.mandatory_context + history_buffer
+        llm_messages = leading_prompts + history_buffer + trailing_prompts
 
         return llm_messages
 
@@ -205,12 +188,56 @@ class HistoryManager:
         """
         self.__history = []
 
-    def get_history(self, optimized=False):
-        if optimized:
-            return self.get_optimised_messages()
-
+    def get_history(self):
+        """
+        Returns entire history.
+        """
         return self.__history
 
-    def __tokens_from_messages(self, messages: List):
+    def __tokens_from_messages(self, messages: List, model):
         """Returns the number of tokens used by a list of messages."""
-        return estimate_token_count(json.dumps(messages), self.model)
+
+        images = []
+        parsed = []
+        for message in messages:
+            message_copy = message.copy()
+
+            if isinstance(message.get("content", None), list):
+                filtered_content = []
+                for item in message["content"]:
+                    if (
+                        isinstance(item, dict)
+                        and item.get("image_url", None)
+                        and item["image_url"]["url"].startswith(
+                            "data:image/jpeg;base64,"
+                        )
+                    ):
+                        images.append(
+                            item["image_url"]["url"].replace(
+                                "data:image/jpeg;base64,", ""
+                            )
+                        )
+                    else:
+                        filtered_content.append(item)
+                message_copy["content"] = filtered_content
+            parsed.append(message_copy)
+
+        image_tokens = 0
+        for image in images:
+            width, height = self.__get_image_size_from_base64(image)
+            image_tokens += self.__count_image_tokens(width, height)
+
+        return estimate_token_count(json.dumps(parsed), model) + image_tokens
+
+    def __get_image_size_from_base64(self, base64_string):
+        image_data = base64.b64decode(base64_string)
+        image = Image.open(BytesIO(image_data))
+
+        return image.size
+
+    def __count_image_tokens(self, width: int, height: int):
+        h = ceil(height / 512)
+        w = ceil(width / 512)
+        n = w * h
+        total = 85 + 170 * n
+        return total

@@ -8,7 +8,7 @@
 _My name is Bot, jAIMs Bot._ 🕶️
 
 jAIms is a lightweight Python framework built on top of the OpenAI library that lets you create powerful LLM agents.
-It is designed with simplicity and ease of use in mind and only depends on `openai` and `tiktoken`.
+It is designed with simplicity and ease of use in mind and only depends on `openai`, `tiktoken` and `Pillow`.
 
 ## Installation
 
@@ -35,11 +35,9 @@ response = agent.run([
 print(response)
 ```
 
-The parameters accepted by the `run` method are those specified in the [official OpenAI docs](https://platform.openai.com/docs/api-reference/chat/create).
-
 ### ⚙️ Functions
 
-Of course, an agent is just a chatbot if it doesn't support functions. jAIms uses the built-in OpenAI function feature to call functions you pass to it. Here's an example where we create a simple sum function and make a simple agent that lets you sum two numbers:
+Of course, an agent is just a chatbot if it doesn't support functions. jAIms uses the built-in OpenAI tools feature to call the functions you pass to it. Here's an example where we create a simple sum function and make a simple agent that lets you sum two numbers:
 
 ```python
 import jaims
@@ -71,10 +69,13 @@ func_wrapper = JAImsFuncWrapper(
 
 # instantiate the agent passing the functions
 agent = JAImsAgent(
-    functions=[func_wrapper],
-    model=JAImsGPTModel.GPT_3_5_TURBO_16K,
-)
-
+        openai_kwargs=JAImsOpenaiKWArgs(
+            model=JAImsGPTModel.GPT_4,
+            tools=[
+                func_wrapper,
+            ],
+        ),
+    )
 # a simple loop that simulates a chatbot
 while True:
     user_input = input("> ")
@@ -82,7 +83,6 @@ while True:
         break
     response = agent.run(
         [{"role": "user", "content": user_input}],
-        stream=True,
     )
 
     for chunk in response:
@@ -93,7 +93,7 @@ while True:
 
 ### ✨ Other features
 
-- Complete control over openai call parameters (temperature, top_p, n, max_tokens, etc.)
+- Complete control over openai call parameters.
 - Automatic chat history management
 - Configuration of the OpenAI model to use
 - Injectable prompt to shape agent behavior
@@ -109,6 +109,9 @@ Currently, jAIms supports the new OpenAI models with functions enabled, specific
 - `gpt-3.5-turbo-0613`
 - `gpt-3.5-turbo-16k-0613`
 - `gpt-4-0613`
+- `gpt-4-32k-0613`
+- `gpt-4-1106-preview`
+- `gpt-4-vision-preview`
 
 I'm not planning to add support for non-OpenAI models at the moment, but contributions are always appreciated.
 

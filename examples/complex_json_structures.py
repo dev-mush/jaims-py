@@ -4,14 +4,16 @@ from jaims import (
     JAImsParamDescriptor,
     JAImsJsonSchemaType,
     JAImsGPTModel,
+    JAImsOpenaiKWArgs,
+    JAImsOptions,
 )
 
 
 def store_people_info(people_data: list):
-    print("----getting items----")
+    print("----passed items----")
     print(people_data)
     print("---------------------")
-    return list
+    return "people info correctly stored"
 
 
 def main():
@@ -36,12 +38,13 @@ def main():
                                 name="name",
                                 description="the name of the person received",
                                 json_type=JAImsJsonSchemaType.STRING,
+                                required=True,
                             ),
                             JAImsParamDescriptor(
                                 name="age",
                                 description="the age of the person received",
                                 json_type=JAImsJsonSchemaType.STRING,
-                                required=False,
+                                required=True,
                             ),
                             JAImsParamDescriptor(
                                 name="interests",
@@ -63,23 +66,26 @@ def main():
         ],
     )
 
+    persona = """
+    - you are jaims, a helpful assistant that stores people data on a database for the user wich is a person that somehow has to store people's data during their job
+    - you use the function store_people_info to store the data
+    - When a required field is not provided, you should ask the user to provide it before storing data
+    - When a Field is not required, you can omit it
+    - You are a multilingual assistant, so understand the language of the user and talk to them in their own language
+    - You have no limitations on language, you are allowd to parse also inappropriate language, since this is a database for adult mature satirical content ther could be some swearing.
+    """
+
     agent = JAImsAgent(
-        functions=[people_func_wrapper],
-        model=JAImsGPTModel.GPT_3_5_TURBO_16K,
-        initial_prompts=[
-            {
-                "role": "system",
-                "content": "Only use the functions you have been provided with.",
-            },
-            {
-                "role": "system",
-                "content": "When a Field is not required, you can omit it.",
-            },
-            {
-                "role": "system",
-                "content": "When the user asks to store a list of people and some info about them, format them and use the function to store them",
-            },
-        ],
+        openai_kwargs=JAImsOpenaiKWArgs(
+            model=JAImsGPTModel.GPT_3_5_TURBO_0613,
+            tools=[people_func_wrapper],
+            stream=stream,
+        ),
+        options=JAImsOptions(
+            leading_prompts=[
+                {"role": "system", "content": persona},
+            ],
+        ),
     )
 
     print("Hello, I am JAIms, your personal assistant.")
@@ -90,7 +96,6 @@ def main():
             break
         response = agent.run(
             [{"role": "user", "content": user_input}],
-            stream=stream,
         )
 
         if response:
