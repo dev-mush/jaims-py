@@ -30,7 +30,9 @@ class JAImsGPTModel(Enum):
     GPT_3_5_TURBO_16K_0613 = ("gpt-3.5-turbo-16k-0613", 16384, 0.003, 0.004)
     GPT_3_5_TURBO_1106 = ("gpt-3.5-turbo-1106", 16385, 0.001, 0.002)
     GPT_4 = ("gpt-4", 8192, 0.03, 0.06)
+    GPT_4_32K = ("gpt-4-32k", 32768, 0.06, 0.12)
     GPT_4_0613 = ("gpt-4-0613", 8192, 0.03, 0.06)
+    GPT_4_32K_0613 = ("gpt-4-32k-0613", 32768, 0.06, 0.12)
     GPT_4_1106_PREVIEW = ("gpt-4-1106-preview", 128000, 0.01, 0.03)
     GPT_4_VISION_PREVIEW = ("gpt-4-vision-preview", 128000, 0.01, 0.03)
 
@@ -147,6 +149,29 @@ def __handle_openai_error(error: openai.OpenAIError) -> ErrorHandlingMethod:
 
 
 class JAImsOpenaiKWArgs:
+    """
+    Represents the keyword arguments for the JAIms OpenAI wrapper.
+    This class entirely mirrors the openai API parameters, so refer to it for documentation.
+    (https://platform.openai.com/docs/api-reference/chat/create).
+
+    Args:
+        model (JAImsGPTModel, optional): The OpenAI model to use. Defaults to JAImsGPTModel.GPT_3_5_TURBO.
+        messages (List[dict], optional): The list of messages for the conversation. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them.
+        max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 500.
+        stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
+        temperature (float, optional): The temperature for generating creative text. Defaults to 0.0.
+        top_p (Optional[int], optional): The top-p value for nucleus sampling. Defaults to None.
+        n (int, optional): The number of responses to generate. Defaults to 1.
+        seed (Optional[int], optional): The seed to be passed to openai to have more consistent outputs. Defaults to None.
+        frequency_penalty (float, optional): The frequency penalty for avoiding repetitive responses. Defaults to 0.0.
+        presence_penalty (float, optional): The presence penalty for encouraging diverse responses. Defaults to 0.0.
+        logit_bias (Optional[Dict[str, float]], optional): The logit bias for influencing the model's output. Defaults to None.
+        response_format (Optional[Dict], optional): The format for the generated response. Defaults to None.
+        stop (Union[Optional[str], Optional[List[str]]], optional): The stop condition for the generated response. Defaults to None.
+        tool_choice (Union[str, Dict], optional): The choice of tool to use. Defaults to "auto".
+        tools (Optional[List[JAImsFuncWrapper]], optional): The list of function wrappers to use as tools. Defaults to None.
+    """
+
     def __init__(
         self,
         model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
@@ -210,6 +235,24 @@ class JAImsOpenaiKWArgs:
 
 
 class JAImsOptions:
+    """
+    Represents the options for JAImsAgent.
+
+    Args:
+        leading_prompts (Optional[List[Dict]]): A list of leading prompts, these will be always prepended to the history for each run.
+        trailing_prompts (Optional[List[Dict]]): A list of trailing promptsm, these will be always appended to the history for each run.
+        max_consecutive_function_calls (int): The maximum number of consecutive function calls allowed (defaults to 10 to avoid infinite loops).
+        optimize_context (bool): Whether to optimize the context in the history manager or not, defaults to True.
+        message_history_size (Optional[int]): The size of the message history for each run, only the last n messages will be passed, defaults to none (every message is passed until optimization starts).
+        max_retries (int): The maximum number of retries after a failing openai call.
+        retry_delay (int): The delay between each retry.
+        exponential_base (int): The base for exponential backoff calculation.
+        exponential_delay (int): The initial delay for exponential backoff.
+        exponential_cap (Optional[int]): The maximum delay for exponential backoff.
+        jitter (bool): Whether to add jitter to the delay (to avoid concurrent firing).
+        debug_stream_function_call (bool): Prints the arguments streamed by OpenAI during function call when streaming enabled.
+    """
+
     def __init__(
         self,
         leading_prompts: Optional[List[Dict]] = None,

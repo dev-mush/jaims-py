@@ -17,41 +17,28 @@ from PIL import Image
 
 class HistoryManager:
     """
-    Handles chat history of the agent.
+    Manages the history of messages sent to OpenAI.
+    The history manager stores the messages in memory and, when the agent is set to optimize the context,
+    it optimizes the history to fit the max tokens supported by the current llm model.
 
-    Attributes
+    Parameters
     ----------
-        model : GPTModel
-            the model to be used by the agent, defaults to gpt-3.5-turbo-0613
-        functions : list (optional)
-            the list of functions that can be called by the agent, used to compute token usage
-        initial_prompts: list (optional)
-            the list of initial prompts to be used by the agent, useful to compute token usage
-        last_n_turns: int (optional)
-            if set, specifies the n last messages to be sent, defaults to None
-
-    Methods
-    -------
-        add_messages(messages)
-            pushes a new message in the history
-        get_history() -> list
-            returns the history
-        clear_history()
-            clears the history
-        optimize_history()
-            optimizes history messages based on context constraints
-
-    Private Members
-    ----------------
-        __history : list
-            holds the current openai messages history. It's meant to be
-            manipulated only by the methods of this class.
+        history : list (optional)
+            the history of messages to be sent to openai
     """
 
     def __init__(
         self,
         history: Optional[List] = None,
     ):
+        """
+        Returns a new HistoryManager instance.
+
+        Parameters
+        ----------
+            history : list (optional)
+                the initial history of messages to be sent to openai
+        """
         self.__history = history or []
 
     def add_messages(self, messages: List):
@@ -86,17 +73,14 @@ class HistoryManager:
         openai_kwargs: JAImsOpenaiKWArgs,
     ) -> List:
         """
-        Returns the history.
+        Returns the messages to be sent to openai for the current run.
 
         Parameters
         ----------
-            agent_max_tokens : int (optional)
-                the max tokens to leave out for the response from openai, defaults to DEFAULT_MAX_TOKENS
-
-        Returns
-        -------
-            list
-                the history of messages to be sent to openai
+            options : JAImsOptions
+                the options for the current run
+            openai_kwargs : JAImsOpenaiKWArgs
+                the openai kwargs for the current run
 
         Raises
         ------
@@ -135,9 +119,6 @@ class HistoryManager:
 
         MAYBE TODO:
         - it would be nice to have an auto-scale up of the context, for instance passing from the gpt-3.5-turbo 4k to the 16k model.
-
-
-
         """
 
         if not options or not openai_kwargs:
@@ -208,6 +189,9 @@ class HistoryManager:
         self.__history = []
 
     def get_history(self):
+        """
+        Returns entire history.
+        """
         return self.__history
 
     def __tokens_from_messages(self, messages: List, model):

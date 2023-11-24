@@ -28,8 +28,17 @@ from jaims.function_handler import (
 from jaims.histroy_manager import HistoryManager
 
 
-# private class used to store a call context when looping happens because of function
 class JAImsCallContext:
+    """
+    Represents the context for a JAIms run.
+    It is used when in case of function calling, the run restarts recursively.
+
+    Args:
+        openai_kwargs (JAImsOpenaiKWArgs): The OpenAI keyword arguments.
+        options (JAImsOptions): The JAIms options.
+        iterations (int, optional): The number of iterations. Defaults to 0.
+    """
+
     def __init__(
         self,
         openai_kwargs: JAImsOpenaiKWArgs,
@@ -50,62 +59,22 @@ class JAImsCallContext:
 
 class JAImsAgent:
     """
-    A simple agent, gets initialized with the model and a list of function that
-    can be called, and returns the response. Handles the conversation history by itself.
+    JAImsAgent realizes the class that interacts with the OpenAI API. It is an agent capable of
+    tool calling, with built in history management and token expense tracking.
 
-    Attributes
-    ----------
-        model : GPTModel
-            the model to be used by the agent, defaults to gpt-3.5-turbo-0613
-        functions : list
-            the list of functions that can be called by the agent
-        initial_prompts: list (optional)
-            the list of initial prompts to be used by the agent, useful to inject
-            some system messages that shape the personality or the scope of the agent
-        optimize_context: bool
-            wether to optimize the context for each call to OpenAi or not. It is useful when the agent
-            is used for instance as a conversational bot, this parameter ensures that, when reaching context limits,
-            older messages will be popped from the history before being passed to OpenAI, defaults to True.
-            When set to false, once the context limit is reached, an exception will be raised.
-        last_n_turns: int
-            The number of last messages that has to be kept in the history, default (0) is uncapped.
-            Uncapped means that the history is sent in full as long as it fits the context and then, depending
-            on the value of optimize_context, it will be optimized trimming the oldest messages or an exception
-            will be raised when saturated.
-        max_consecutive_calls: int
-            the maximum number of consecutive function calls that can be made by the agent, defaults to 5
-            for safety reasons, to avoid unwanted loops that might impact up token usage
-        openai_api_key: str
-            the openai api key, defaults to the OPENAI_API_KEY environment variable if not provided
+    Attributes:
+        openai_kwargs (JAImsOpenaiKWArgs): The OpenAI keyword arguments.
+        options (JAImsOptions): The options for the agent.
+        openai_api_key (Optional[str]): The OpenAI API key.
+        transaction_storage (JAImsTransactionStorageInterface): The transaction storage interface.
 
-    Methods
-    -------
-        run(messages, stream: bool optional) -> JAImsResponse
-            performs the call to OpenAI and returns the response
-        clear_history()
-            clears the agent history
-        get_history(optimized: bool) -> List[dict]
-            returns the current history of the agent, if optimized is passed to True, it will return the
-            optimized version, otherwise the full history since the beginning of this agent session
-        get_expenses() -> List[JaimsTokensExpense]
-            returns the currently spent tokens for this agent session, one for each model used
-        get_last_run_expenses() -> List[JaimsTokensExpense]
-            returns the spent tokens for the last run of the agent, one for each model used, it is reset at each run
-        get_openai_responses() -> List[dict]
-            returns the list of raw responses from OpenAI for the entire session
-        get_openai_last_run_responses() -> List[dict]
-            returns the list of raw responses from OpenAI for the last run of the agent, it is reset at each run
-
-
-    Raises
-    ------
-        MissingOpenaiAPIKeyException
-            if the OPENAI_API_KEY environment variable is not set and no api key is provided
-
-    Private Members
-    ---------------
-        __history_manager : HistoryManager
-            the history manager
+    Methods:
+        run: Runs the agent with the given messages and options.
+        get_expenses: Returns the tokens spent in the current session (all runs performed on this agent).
+        get_last_run_expenses: Returns the tokens spent in the last run of the agent.
+        get_run_history: Returns the history that will be sent to OpenAI for a run (returns the messages history passed to openai in the last run).
+        get_history: Returns the complete history of the agent.
+        clear_history: Clears the history.
     """
 
     def __init__(
@@ -135,41 +104,14 @@ class JAImsAgent:
         override_openai_kwargs: Optional[JAImsOpenaiKWArgs] = None,
     ) -> Union[str, Generator[str, None, None]]:
         """
-        Calls OpenAI with the passed parameters and returns or streams the response.
+        Starts a run calling openai with the passed messages.
+        During a run, unless cleared, the history of the previous runs is preserved and optimized (see HistoryManager), unless clear_history is called.
 
-        Parameters
-        ----------
-            messages : list
-                the list of messages to be sent
-            stream : bool (optional)
-                whether to stream the response or not, defaults to False
-            max_tokens : int (optional)
-                the maximum tokens to be used to generate the answer
-                defaults to 512
-            temperature : float (optional)
-                the temperature to be used to generate the answer
-                defaults to 0.0
-            top_p : float (optional)
-                the top_p to be used to generate the answer
-                defaults to None
-            n : int (optional)
-                the number of answers to be generated
-                defaults to 1
-            function_call : str (optional)
-                the function call to be used, defaults to "auto"
-            max_retries : int
-                the maximum number of retries to be used when calling OpenAI in case of error
-                defaults to 15
-            delay : int
-                the delay in seconds to be used between retries
-                defaults to 10
-
-        Returns
-        -------
-            JAImsResponse
-                the response object
+        Args:
+            messages (Optional[List[dict]], optional): The messages to be sent to OpenAI.
+            override_options (Optional[JAImsOptions], optional): The options to be used for this run (entirely overriding those passed in constructor, only for this run).
+            override_openai_kwargs (Optional[JAImsOpenaiKWArgs], optional): The OpenAI keyword arguments to be used for this run (entirely overriding those passed in constructor, only for this run).
         """
-
         messages = messages or []
         if override_openai_kwargs:
             messages = override_openai_kwargs.messages
@@ -367,6 +309,12 @@ class JAImsAgent:
         """
 
         return self.__history_manager.get_history()
+
+    def clear_history(self):
+        """
+        Clears the history.
+        """
+        self.__history_manager.clear_history()
 
     @staticmethod
     def __init_expense_dictionary():
