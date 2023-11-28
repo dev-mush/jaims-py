@@ -25,7 +25,7 @@ from jaims.exceptions import (
 from jaims.function_handler import (
     JAImsFunctionHandler,
 )
-from jaims.histroy_manager import HistoryManager
+from jaims.history_manager import HistoryManager
 
 
 class JAImsCallContext:
