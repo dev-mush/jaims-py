@@ -136,7 +136,10 @@ class JAImsAgent:
 
         call_context.openai_kwargs.messages = messages
 
-        response = get_openai_response(call_context.openai_kwargs, call_context.options)
+        response = get_openai_response(
+            call_context.openai_kwargs,
+            call_context.options,
+        )
 
         if isinstance(response, openai.Stream):
             return self.__handle_streaming_response(response, call_context)
@@ -162,7 +165,8 @@ class JAImsAgent:
                     and message_delta.tool_calls
                 ):
                     print(
-                        message_delta.tool_calls[0].function.arguments,  # type: ignore
+                        # type: ignore
+                        message_delta.tool_calls[0].function.arguments,
                         flush=True,
                         end="",
                     )
@@ -368,7 +372,9 @@ class JAImsAgent:
             return new_delta
 
         if new_delta.content:
-            accumulator.content = (accumulator.content or "") + new_delta.content
+            accumulator.content = (
+                accumulator.content or ""
+            ) + new_delta.content
         if new_delta.role:
             accumulator.role = (accumulator.role or "") + new_delta.role
         if new_delta.tool_calls:
