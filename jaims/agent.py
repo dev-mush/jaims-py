@@ -25,7 +25,7 @@ from jaims.exceptions import (
 from jaims.function_handler import (
     JAImsFunctionHandler,
 )
-from jaims.histroy_manager import HistoryManager
+from jaims.history_manager import HistoryManager
 
 
 class JAImsCallContext:
@@ -82,7 +82,7 @@ class JAImsAgent:
         openai_kwargs: JAImsOpenaiKWArgs = JAImsOpenaiKWArgs(),
         options: JAImsOptions = JAImsOptions(),
         openai_api_key: Optional[str] = None,
-        transaction_storage: JAImsTransactionStorageInterface = JAImsTransactionStorageInterface(),
+        transaction_storage: Optional[JAImsTransactionStorageInterface] = None,
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
@@ -95,7 +95,10 @@ class JAImsAgent:
         self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
         self.__function_handler = JAImsFunctionHandler()
         self.__history_manager = HistoryManager()
-        self.__transaction_storage = transaction_storage
+        if transaction_storage is None:
+            self.__transaction_storage = JAImsTransactionStorageInterface()
+        else:
+            self.__transaction_storage = transaction_storage
 
     def run(
         self,
@@ -136,7 +139,10 @@ class JAImsAgent:
 
         call_context.openai_kwargs.messages = messages
 
-        response = get_openai_response(call_context.openai_kwargs, call_context.options)
+        response = get_openai_response(
+            call_context.openai_kwargs,
+            call_context.options,
+        )
 
         if isinstance(response, openai.Stream):
             return self.__handle_streaming_response(response, call_context)
@@ -162,7 +168,8 @@ class JAImsAgent:
                     and message_delta.tool_calls
                 ):
                     print(
-                        message_delta.tool_calls[0].function.arguments,  # type: ignore
+                        # type: ignore
+                        message_delta.tool_calls[0].function.arguments,
                         flush=True,
                         end="",
                     )
@@ -368,7 +375,9 @@ class JAImsAgent:
             return new_delta
 
         if new_delta.content:
-            accumulator.content = (accumulator.content or "") + new_delta.content
+            accumulator.content = (
+                accumulator.content or ""
+            ) + new_delta.content
         if new_delta.role:
             accumulator.role = (accumulator.role or "") + new_delta.role
         if new_delta.tool_calls:
