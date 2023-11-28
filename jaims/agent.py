@@ -82,7 +82,7 @@ class JAImsAgent:
         openai_kwargs: JAImsOpenaiKWArgs = JAImsOpenaiKWArgs(),
         options: JAImsOptions = JAImsOptions(),
         openai_api_key: Optional[str] = None,
-        transaction_storage: JAImsTransactionStorageInterface = JAImsTransactionStorageInterface(),
+        transaction_storage: Optional[JAImsTransactionStorageInterface] = None,
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
@@ -95,7 +95,10 @@ class JAImsAgent:
         self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
         self.__function_handler = JAImsFunctionHandler()
         self.__history_manager = HistoryManager()
-        self.__transaction_storage = transaction_storage
+        if transaction_storage is None:
+            self.__transaction_storage = JAImsTransactionStorageInterface()
+        else:
+            self.__transaction_storage = transaction_storage
 
     def run(
         self,
