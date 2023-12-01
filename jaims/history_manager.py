@@ -82,10 +82,6 @@ class HistoryManager:
             openai_kwargs : JAImsOpenaiKWArgs
                 the openai kwargs for the current run
 
-        Raises
-        ------
-            TokensLimitExceeded
-                if the max tokens to be used exceed the max tokens supported by the current llm model
 
         Developer Notes
         ---------------
@@ -170,13 +166,6 @@ class HistoryManager:
                     + trailing_prompts,
                     openai_kwargs.model,
                 )
-        elif messages_tokens > context_max_tokens:
-            raise JAImsTokensLimitExceeded(
-                openai_kwargs.model.max_tokens,
-                messages_tokens,
-                openai_kwargs.max_tokens,
-                has_optimized=False,
-            )
 
         llm_messages = leading_prompts + history_buffer + trailing_prompts
 
