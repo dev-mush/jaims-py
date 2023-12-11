@@ -379,7 +379,8 @@ class JAImsAgent:
             return new_delta
 
         if new_delta.content:
-            accumulator.content = (accumulator.content or "") + new_delta.content
+            accumulator.content = (
+                accumulator.content or "") + new_delta.content
         if new_delta.role:
             accumulator.role = (accumulator.role or "") + new_delta.role
         if new_delta.tool_calls:
