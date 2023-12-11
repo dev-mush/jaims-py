@@ -82,13 +82,17 @@ class JAImsAgent:
         openai_kwargs: JAImsOpenaiKWArgs = JAImsOpenaiKWArgs(),
         options: JAImsOptions = JAImsOptions(),
         openai_api_key: Optional[str] = None,
+        openai_base_url: Optional[str] = None,
         transaction_storage: Optional[JAImsTransactionStorageInterface] = None,
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
             raise JAImsMissingOpenaiAPIKeyException()
-        openai.api_key = openai_api_key
 
+        self.__openai_client = openai.OpenAI(
+            api_key=openai_api_key,
+            base_url=openai_base_url,
+        )
         self.__openai_kwargs = openai_kwargs
         self.__options = options
         self.__expense = JAImsAgent.__init_expense_dictionary()
@@ -168,7 +172,8 @@ class JAImsAgent:
                     and message_delta.tool_calls
                 ):
                     print(
-                        message_delta.tool_calls[0].function.arguments,  # type: ignore
+                        # type: ignore
+                        message_delta.tool_calls[0].function.arguments,
                         flush=True,
                         end="",
                     )
