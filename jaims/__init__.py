@@ -1,6 +1,6 @@
 from .agent import JAImsAgent
 from .openai_wrappers import (
-    JAImsGPTModel,
+    BaseGPTModel, JAImsGPTModel,
     JAImsTokensExpense,
     estimate_token_count,
     JAImsOpenaiKWArgs,

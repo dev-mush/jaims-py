@@ -17,7 +17,19 @@ DEFAULT_MAX_TOKENS = 512
 MAX_CONSECUTIVE_CALLS = 10
 
 
-class JAImsGPTModel(Enum):
+class BaseGPTModel:
+    def __init__(self, string, max_tokens, price_1k_tokens_in, price_1k_tokens_out, tokenizer):
+        self.string = string
+        self.max_tokens = max_tokens
+        self.price_1k_tokens_in = price_1k_tokens_in
+        self.price_1k_tokens_out = price_1k_tokens_out
+        self.tokenizer = tokenizer
+
+    def __str__(self):
+        return self.string
+
+
+class JAImsGPTModel(BaseGPTModel, Enum):
     """
     The OPENAI GPT models available.
     Only those that support functions are listed, so just:
@@ -37,13 +49,8 @@ class JAImsGPTModel(Enum):
     GPT_4_VISION_PREVIEW = ("gpt-4-vision-preview", 128000, 0.01, 0.03)
 
     def __init__(self, string, max_tokens, price_1k_tokens_in, price_1k_tokens_out):
-        self.string = string
-        self.max_tokens = max_tokens
-        self.price_1k_tokens_in = price_1k_tokens_in
-        self.price_1k_tokens_out = price_1k_tokens_out
-
-    def __str__(self):
-        return self.string
+        super().__init__(string, max_tokens, price_1k_tokens_in,
+                         price_1k_tokens_out, tiktoken.encoding_for_model)
 
 
 class JAImsTokensExpense:
@@ -120,8 +127,10 @@ class JAImsTokensExpense:
 
 def estimate_token_count(string: str, model: JAImsGPTModel) -> int:
     """Returns the number of tokens in a text string."""
+    if not model.tokenizer:
+        return 0
 
-    encoding = tiktoken.encoding_for_model(model.string)
+    encoding = model.tokenizer(model.string)
     num_tokens = len(encoding.encode(string))
     return num_tokens
 
@@ -222,7 +231,8 @@ class JAImsOpenaiKWArgs:
             "stop": self.stop,
         }
 
-        kwargs = {key: value for key, value in kwargs.items() if value is not None}
+        kwargs = {key: value for key,
+                  value in kwargs.items() if value is not None}
 
         if self.logit_bias:
             kwargs["logit_bias"] = self.logit_bias
@@ -283,6 +293,7 @@ class JAImsOptions:
 
 
 def get_openai_response(
+    openai_client: openai.OpenAI,
     openai_kw_args: JAImsOpenaiKWArgs,
     call_options: JAImsOptions,
 ) -> Union[ChatCompletion, Stream[ChatCompletionChunk]]:
@@ -297,7 +308,7 @@ def get_openai_response(
 
     while retries < call_options.max_retries:
         try:
-            response = openai.chat.completions.create(
+            response = openai_client.chat.completions.create(
                 **openai_kw_args.to_dict(),
             )
 

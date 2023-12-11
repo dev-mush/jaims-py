@@ -144,6 +144,7 @@ class JAImsAgent:
         call_context.openai_kwargs.messages = messages
 
         response = get_openai_response(
+            self.__openai_client,
             call_context.openai_kwargs,
             call_context.options,
         )
