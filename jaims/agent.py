@@ -278,6 +278,8 @@ class JAImsAgent:
                 rough_estimate=True,
             )
 
+        if expense.gpt_model.string not in self.__expense:
+            return
         self.__last_run_expense[expense.gpt_model.string].add_from(expense)
         self.__expense[expense.gpt_model.string].add_from(expense)
 
