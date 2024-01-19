@@ -95,57 +95,43 @@ class JAImsParamDescriptor:
         return schema
 
 
-class JAImsFuncWrapper:
+class JAImsToolDescriptor:
     """
-    Wraps a function call to be used in the OPENAI API.
-    Holds the function to be called as well as the function name, its description that the agent will understand,
-    and the response json schema.
+    Describes a tool to be used in the OPENAI API. Supports only function tool for now.
 
     Attributes
     ----------
-        function : Callable[..., Any]
-            the function to be called
         name : str
-            the function name
+            the tool name
         description : str
-            the function description
+            the tool description
         params_descriptors: List[JAImsParamDescriptor]
             the list of parameters descriptors
-
-    Methods
-    -------
-        call(params: Dict[str, Any]) -> Any
-            calls the function with the given parameters
-        get_jsonapi_schema() -> Dict[str, Any]
-            returns the jsonapi schema for the function
     """
 
     def __init__(
         self,
-        function: Callable[..., Any],
         name: str,
         description: str,
         params_descriptors: List[JAImsParamDescriptor],
     ):
-        self.function = function
         self.name = name
         self.description = description
         self.params_descriptors = params_descriptors
 
-    def call(self, params: Dict[str, Any]) -> Any:
-        """
-        Calls the function with the given parameters.
-
-        Parameters
-        ----------
-            params : dict
-                the parameters to be passed to the function
-        """
-        return self.function(**params)
+    def to_openai_function_tool(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.get_jsonapi_schema(),
+            },
+        }
 
     def get_jsonapi_schema(self) -> Dict[str, Any]:
         """
-        Returns the jsonapi schema for the function.
+        Returns the jsonapi schema for function.
         """
         schema = {
             "type": "object",
@@ -161,6 +147,49 @@ class JAImsFuncWrapper:
         return schema
 
 
+class JAImsFuncWrapper:
+    """
+    Wraps a tool used by the OPENAI API along with a function to be called locally when
+    the tool is invoked by openai.
+
+
+    Attributes
+    ----------
+        function : Callable[..., Any]
+            the function to be called
+        name : str
+            the function name
+        description : str
+            the function description
+        params_descriptors: List[JAImsParamDescriptor]
+            the list of parameters descriptors
+
+    Methods
+    -------
+        call(params: Dict[str, Any]) -> Any
+            calls the wrapped function with the given parameters
+    """
+
+    def __init__(
+        self,
+        function: Callable[..., Any],
+        function_tool: JAImsToolDescriptor,
+    ):
+        self.function = function
+        self.function_tool = function_tool
+
+    def call(self, params: Dict[str, Any]) -> Any:
+        """
+        Calls the function with the given parameters.
+
+        Parameters
+        ----------
+            params : dict
+                the parameters to be passed to the function
+        """
+        return self.function(**params)
+
+
 class JAImsFunctionHandler:
     """
     Handles the functions to be used in the OPENAI API.
@@ -173,7 +202,7 @@ class JAImsFunctionHandler:
     """
 
     def handle_from_message(
-        self, message: Dict[str, Any], functions: List[JAImsFuncWrapper]
+        self, message: Dict[str, Any], function_wrappers: List[JAImsFuncWrapper]
     ) -> List[Dict[str, Any]]:
         """
         Handles a function_call message, calling the appropriate function.
@@ -208,10 +237,10 @@ class JAImsFunctionHandler:
             )
 
         # invoke function
-        return self.__call_functions(function_calls, functions)
+        return self.__call_functions(function_calls, function_wrappers)
 
     def __call_functions(
-        self, function_calls: List[dict], functions
+        self, function_calls: List[dict], function_wrappers: List[JAImsFuncWrapper]
     ) -> List[dict[str, Any]]:
         # Check if function_name exists in functions, if not, raise UnexpectedFunctionCallException
 
@@ -219,7 +248,8 @@ class JAImsFunctionHandler:
         for fc in function_calls:
             function_name = fc["name"]
             function_wrapper = next(
-                (f for f in functions if f.name == function_name), None
+                (f for f in function_wrappers if f.function_tool.name == function_name),
+                None,
             )
             if not function_wrapper:
                 raise JAImsUnexpectedFunctionCall(function_name)
@@ -250,20 +280,9 @@ class JAImsFunctionHandler:
 
 
 def parse_function_wrappers_to_tools(
-    functions: List[JAImsFuncWrapper],
+    func_wrappers: List[JAImsFuncWrapper],
 ) -> List[Dict[str, Any]]:
-    openai_functions = []
-    for function in functions:
-        function_data = {
-            k: v
-            for k, v in {
-                "name": function.name,
-                "description": function.description,
-                "parameters": function.get_jsonapi_schema(),
-            }.items()
-            if v is not None
-        }
-
-        openai_functions.append({"type": "function", "function": function_data})
-
-    return openai_functions
+    return [
+        func_wrapper.function_tool.to_openai_function_tool()
+        for func_wrapper in func_wrappers
+    ]

@@ -2,6 +2,7 @@ from jaims import (
     JAImsAgent,
     JAImsFuncWrapper,
     JAImsParamDescriptor,
+    JAImsToolDescriptor,
     JAImsJsonSchemaType,
     JAImsGPTModel,
     JAImsOpenaiKWArgs,
@@ -21,49 +22,51 @@ def main():
 
     people_func_wrapper = JAImsFuncWrapper(
         function=store_people_info,
-        name="store_people_info",
-        description="this function MUST be used to store the result of the extraction into the database.",
-        params_descriptors=[
-            JAImsParamDescriptor(
-                name="people_data",
-                description="list of people data to store",
-                json_type=JAImsJsonSchemaType.ARRAY,
-                array_type_descriptors=[
-                    JAImsParamDescriptor(
-                        name="person_record",
-                        description="json object that holds information about an extracted name and its description",
-                        json_type=JAImsJsonSchemaType.OBJECT,
-                        attributes_params_descriptors=[
-                            JAImsParamDescriptor(
-                                name="name",
-                                description="the name of the person received",
-                                json_type=JAImsJsonSchemaType.STRING,
-                                required=True,
-                            ),
-                            JAImsParamDescriptor(
-                                name="age",
-                                description="the age of the person received",
-                                json_type=JAImsJsonSchemaType.STRING,
-                                required=True,
-                            ),
-                            JAImsParamDescriptor(
-                                name="interests",
-                                description="the interests like hobbies and what the person likes to do",
-                                json_type=JAImsJsonSchemaType.ARRAY,
-                                required=False,
-                                array_type_descriptors=[
-                                    JAImsParamDescriptor(
-                                        name="interest",
-                                        description="the interest of the person",
-                                        json_type=JAImsJsonSchemaType.STRING,
-                                    ),
-                                ],
-                            ),
-                        ],
-                    ),
-                ],
-            )
-        ],
+        function_tool=JAImsToolDescriptor(
+            name="store_people_info",
+            description="this function MUST be used to store the result of the extraction into the database.",
+            params_descriptors=[
+                JAImsParamDescriptor(
+                    name="people_data",
+                    description="list of people data to store",
+                    json_type=JAImsJsonSchemaType.ARRAY,
+                    array_type_descriptors=[
+                        JAImsParamDescriptor(
+                            name="person_record",
+                            description="json object that holds information about an extracted name and its description",
+                            json_type=JAImsJsonSchemaType.OBJECT,
+                            attributes_params_descriptors=[
+                                JAImsParamDescriptor(
+                                    name="name",
+                                    description="the name of the person received",
+                                    json_type=JAImsJsonSchemaType.STRING,
+                                    required=True,
+                                ),
+                                JAImsParamDescriptor(
+                                    name="age",
+                                    description="the age of the person received",
+                                    json_type=JAImsJsonSchemaType.STRING,
+                                    required=True,
+                                ),
+                                JAImsParamDescriptor(
+                                    name="interests",
+                                    description="the interests like hobbies and what the person likes to do",
+                                    json_type=JAImsJsonSchemaType.ARRAY,
+                                    required=False,
+                                    array_type_descriptors=[
+                                        JAImsParamDescriptor(
+                                            name="interest",
+                                            description="the interest of the person",
+                                            json_type=JAImsJsonSchemaType.STRING,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
+                    ],
+                )
+            ],
+        ),
     )
 
     persona = """

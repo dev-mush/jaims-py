@@ -4,16 +4,16 @@ from enum import Enum
 import time
 from typing import Any, List, Optional, Dict, Union
 import openai
+from openai import OpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai import Stream
 import tiktoken
 import logging
 import random
-import json
 
 from jaims.function_handler import JAImsFuncWrapper, parse_function_wrappers_to_tools
 
-DEFAULT_MAX_TOKENS = 512
+DEFAULT_MAX_TOKENS = 1024
 MAX_CONSECUTIVE_CALLS = 10
 
 
@@ -258,7 +258,7 @@ class JAImsOptions:
         leading_prompts: Optional[List[Dict]] = None,
         trailing_prompts: Optional[List[Dict]] = None,
         max_consecutive_function_calls: int = MAX_CONSECUTIVE_CALLS,
-        optimize_context: bool = True,
+        optimize_context: bool = False,
         message_history_size: Optional[int] = None,
         max_retries=15,
         retry_delay=10,
@@ -297,8 +297,10 @@ def get_openai_response(
 
     while retries < call_options.max_retries:
         try:
-            response = openai.chat.completions.create(
-                **openai_kw_args.to_dict(),
+            client = OpenAI()
+            kwargs = openai_kw_args.to_dict()
+            response = client.chat.completions.create(
+                **kwargs,
             )
 
             return response

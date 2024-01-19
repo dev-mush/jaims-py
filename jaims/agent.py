@@ -221,7 +221,7 @@ class JAImsAgent:
         if message.tool_calls:
             result_messages = self.__function_handler.handle_from_message(
                 message=message_dict,
-                functions=call_context.openai_kwargs.tools or [],
+                function_wrappers=call_context.openai_kwargs.tools or [],
             )
             if call_context.openai_kwargs.tool_choice == "auto":
                 self.__history_manager.add_messages(result_messages)
