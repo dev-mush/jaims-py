@@ -4,6 +4,7 @@ import json
 from typing import Any, List, Dict, Optional, Callable
 
 from jaims.exceptions import JAImsUnexpectedFunctionCall
+from jaims.openai_wrappers import JAImsOptions, JAImsOpenaiKWArgs
 
 
 # Enum class over all Json Types
@@ -190,6 +191,78 @@ class JAImsFuncWrapper:
         return self.function(**params)
 
 
+class JAImsToolResponse:
+    """
+    This class offers a way to interact with the agent to trigger events after a tool is called.
+    It can be used as a response from a tool call.
+    It is not mandatory, return this class from your function tools if you want to interact with the agent to alter the flow of the execution.
+
+    Attributes
+    ----------
+        content : Any
+            the content of the response to be sent to the LLM
+        stop: bool
+            Whether the tool call should stop the current execution or not, defaults to False.
+            This is meant to be used when the tool calling is set to "auto" and it is necessary to
+            stop the current execution but, in case of parallel tool calling, all the other tools should be called regardless.
+            The net result is that the result of each tool call won't be sent back to the LLM and not tracked in the history.
+        halt: bool
+            Whether the tool call should stop the current execution or not, defaults to False.
+            This is meant to be used when the tool calling is set to "auto" and it is necessary to stop the current execution abruptly.
+            This means that in the context of parallel tool calling, as soon as the halt is set to True, all subsequent tool calls are not executed and the current run will terminate.
+            The net result is that the result of each tool call won't be sent back to the LLM and not tracked in the history.
+        override_kwargs: JAImsOpenaiKWArgs (optional)
+            The kwargs to be used to override the current kwargs when giving tool results back to the LLM.
+            If parallel tools are called in the same iteration and more than one sets an override_kwargs, the last override_kwargs will be used since, by design, the results are sent back to the LLM in batch.
+            Useful for instance to update the model version, the token size or the temperature.
+        override_options: JAImsOptions (optional)
+            The options to be used to override the current options when giving tool results back to the LLM.
+            If parallel tools are called in the same iteration and each sets an override_options, the last override_options will be used since, by design, the results are sent back to the LLM in batch.
+            Useful for instance to update the static leading and trailing prompts, finetune the max consecutive calls allowed and so on.
+    """
+
+    def __init__(
+        self,
+        content: Any,
+        halt: bool = False,
+        override_kwargs: Optional[JAImsOpenaiKWArgs] = None,
+        override_options: Optional[JAImsOptions] = None,
+    ):
+        self.content = content
+        self.halt = halt
+        self.override_kwargs = override_kwargs
+        self.override_options = override_options
+
+
+class ToolResults:
+    """
+    Used Internally by the function handler to pass the result back to the agent.
+
+    Attributes
+    ----------
+        function_result: List[Any]
+            the list of function tool results to be sent to the LLM
+        stop: bool
+            Wether the agent should stop the current execution or not, defaults to False.
+        override_kwargs: JAImsOpenaiKWArgs (optional)
+            Kwargs to be used to override the current kwargs when giving tool results back to the LLM.
+        override_options: JAImsOptions (optional)
+            Options to be used to override the current options when giving tool results back to the LLM.
+    """
+
+    def __init__(
+        self,
+        function_results: List[JAImsToolResponse],
+        stop: bool = False,
+        override_kwargs: Optional[JAImsOpenaiKWArgs] = None,
+        override_options: Optional[JAImsOptions] = None,
+    ):
+        self.tool_responses = function_results
+        self.stop = stop
+        self.override_kwargs = override_kwargs
+        self.override_options = override_options
+
+
 class JAImsFunctionHandler:
     """
     Handles the functions to be used in the OPENAI API.
@@ -203,7 +276,7 @@ class JAImsFunctionHandler:
 
     def handle_from_message(
         self, message: Dict[str, Any], function_wrappers: List[JAImsFuncWrapper]
-    ) -> List[Dict[str, Any]]:
+    ) -> ToolResults:
         """
         Handles a function_call message, calling the appropriate function.
 
@@ -241,7 +314,7 @@ class JAImsFunctionHandler:
 
     def __call_functions(
         self, function_calls: List[dict], function_wrappers: List[JAImsFuncWrapper]
-    ) -> List[dict[str, Any]]:
+    ) -> ToolResults:
         # Check if function_name exists in functions, if not, raise UnexpectedFunctionCallException
 
         results = []
@@ -254,29 +327,34 @@ class JAImsFunctionHandler:
             if not function_wrapper:
                 raise JAImsUnexpectedFunctionCall(function_name)
 
-            try:
-                fc_result = function_wrapper.function(**fc["args"])
-                results.append(
-                    {
-                        "name": function_name,
-                        "tool_call_id": fc["tool_call_id"],
-                        "role": "tool",
-                        "content": json.dumps(fc_result),
-                    }
-                )
-            except TypeError as e:
-                results.append(
-                    {
-                        "name": function_name,
-                        "tool_call_id": fc["tool_call_id"],
-                        "role": "tool",
-                        "content": json.dumps({"error": str(e)}),
-                    }
-                )
+            fc_result = function_wrapper.call(**fc["args"])
+            stop = False
+            override_kwargs = None
+            override_options = None
+            if isinstance(fc_result, JAImsToolResponse):
+                if fc_result.halt:
+                    return ToolResults(function_results=results, stop=True)
 
-        # If the name of the current function matches the provided name
-        # Call the function and return its result
-        return results
+                stop = fc_result.halt
+                override_kwargs = fc_result.override_kwargs
+                override_options = fc_result.override_options
+                fc_result = fc_result.content
+
+            results.append(
+                {
+                    "name": function_name,
+                    "tool_call_id": fc["tool_call_id"],
+                    "role": "tool",
+                    "content": json.dumps(fc_result),
+                }
+            )
+
+        return ToolResults(
+            function_results=results,
+            stop=stop,
+            override_kwargs=override_kwargs,
+            override_options=override_options,
+        )
 
 
 def parse_function_wrappers_to_tools(

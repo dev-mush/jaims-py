@@ -56,6 +56,16 @@ class JAImsCallContext:
                 f"Max consecutive function calls exceeded ({self.options.max_consecutive_function_calls})"
             )
 
+    def update(
+        self,
+        openai_kwargs: Optional[JAImsOpenaiKWArgs] = None,
+        options: Optional[JAImsOptions] = None,
+    ):
+        if openai_kwargs:
+            self.openai_kwargs = openai_kwargs
+        if options:
+            self.options = options
+
 
 class JAImsAgent:
     """
@@ -100,6 +110,7 @@ class JAImsAgent:
         else:
             self.__transaction_storage = transaction_storage
 
+    # TODO: add support for multiple responses when n>1
     def run(
         self,
         messages: Optional[List[dict]] = None,
@@ -219,12 +230,20 @@ class JAImsAgent:
         self.__history_manager.add_messages([message_dict])
 
         if message.tool_calls:
-            result_messages = self.__function_handler.handle_from_message(
+            tools_results = self.__function_handler.handle_from_message(
                 message=message_dict,
                 function_wrappers=call_context.openai_kwargs.tools or [],
             )
-            if call_context.openai_kwargs.tool_choice == "auto":
-                self.__history_manager.add_messages(result_messages)
+
+            if (
+                tools_results.stop == False
+                and call_context.openai_kwargs.tool_choice == "auto"
+            ):
+                self.__history_manager.add_messages(tools_results.tool_responses)
+                call_context.update(
+                    openai_kwargs=call_context.openai_kwargs,
+                    options=call_context.options,
+                )
                 return self.__call_openai(call_context)
 
         # if the response was streaming only an empty string must be returned
