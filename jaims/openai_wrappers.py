@@ -156,7 +156,7 @@ class JAImsOpenaiKWArgs:
 
     Args:
         model (JAImsGPTModel, optional): The OpenAI model to use. Defaults to JAImsGPTModel.GPT_3_5_TURBO.
-        messages (List[dict], optional): The list of messages for the conversation. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them.
+        messages (List[dict], optional): The list of messages for the chat completion. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them. If passed, they will always be appended to the messages passed in the run method.
         max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 500.
         stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
         temperature (float, optional): The temperature for generating creative text. Defaults to 0.0.

@@ -128,7 +128,7 @@ class JAImsAgent:
         """
         messages = messages or []
         if override_openai_kwargs:
-            messages = override_openai_kwargs.messages
+            messages.extend(override_openai_kwargs.messages or [])
 
         self.__history_manager.add_messages(messages)
         options = override_options or self.__options
@@ -239,7 +239,13 @@ class JAImsAgent:
                 tools_results.stop == False
                 and call_context.openai_kwargs.tool_choice == "auto"
             ):
-                self.__history_manager.add_messages(tools_results.tool_responses)
+                messages = tools_results.function_result_messages
+                messages.extend(
+                    tools_results.override_kwargs.messages
+                    if tools_results.override_kwargs is not None
+                    else []
+                )
+                self.__history_manager.add_messages(message)
                 call_context.update(
                     openai_kwargs=call_context.openai_kwargs,
                     options=call_context.options,

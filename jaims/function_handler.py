@@ -240,8 +240,8 @@ class ToolResults:
 
     Attributes
     ----------
-        function_result: List[Any]
-            the list of function tool results to be sent to the LLM
+        function_result_messages: List[Any]
+            the list of function tool result messages to be sent to the LLM
         stop: bool
             Wether the agent should stop the current execution or not, defaults to False.
         override_kwargs: JAImsOpenaiKWArgs (optional)
@@ -252,12 +252,12 @@ class ToolResults:
 
     def __init__(
         self,
-        function_results: List[JAImsToolResponse],
+        function_result_messages: List[Any],
         stop: bool = False,
         override_kwargs: Optional[JAImsOpenaiKWArgs] = None,
         override_options: Optional[JAImsOptions] = None,
     ):
-        self.tool_responses = function_results
+        self.function_result_messages = function_result_messages
         self.stop = stop
         self.override_kwargs = override_kwargs
         self.override_options = override_options
@@ -333,7 +333,7 @@ class JAImsFunctionHandler:
             override_options = None
             if isinstance(fc_result, JAImsToolResponse):
                 if fc_result.halt:
-                    return ToolResults(function_results=results, stop=True)
+                    return ToolResults(function_result_messages=results, stop=True)
 
                 stop = fc_result.halt
                 override_kwargs = fc_result.override_kwargs
@@ -350,7 +350,7 @@ class JAImsFunctionHandler:
             )
 
         return ToolResults(
-            function_results=results,
+            function_result_messages=results,
             stop=stop,
             override_kwargs=override_kwargs,
             override_options=override_options,
