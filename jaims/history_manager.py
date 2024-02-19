@@ -2,14 +2,11 @@ from io import BytesIO
 from typing import List, Optional
 from jaims.openai_wrappers import (
     estimate_token_count,
-    JAImsOptions,
-    JAImsOpenaiKWArgs,
 )
 
-from jaims.exceptions import JAImsTokensLimitExceeded
+from jaims.entities import JAImsTokensLimitExceeded, JAImsOptions, JAImsOpenaiKWArgs
 import json
 
-from jaims.function_handler import parse_function_wrappers_to_tools
 from math import ceil
 import base64
 from PIL import Image
@@ -67,6 +64,7 @@ class HistoryManager:
 
         self.__history.extend(messages)
 
+    # TODO: check if options and kwargs are necessary, consider passing only necessary fields
     def get_messages_for_current_run(
         self,
         options: JAImsOptions,
@@ -129,7 +127,15 @@ class HistoryManager:
 
         # create the compound history with the mandatory context
         # the actual chat history and the functions to calculate the tokens
-        json_functions = parse_function_wrappers_to_tools(openai_kwargs.tools or [])
+        json_functions = (
+            [
+                function_tool.function_tool.to_openai_function_tool()
+                for function_tool in openai_kwargs.tools
+            ]
+            if openai_kwargs.tools is not None
+            else []
+        )
+
         leading_prompts = options.leading_prompts or []
         trailing_prompts = options.trailing_prompts or []
         compound_history = (

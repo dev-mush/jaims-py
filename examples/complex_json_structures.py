@@ -2,7 +2,7 @@ from jaims import (
     JAImsAgent,
     JAImsFuncWrapper,
     JAImsParamDescriptor,
-    JAImsToolDescriptor,
+    JAImsFunctionToolDescriptor,
     JAImsJsonSchemaType,
     JAImsGPTModel,
     JAImsOpenaiKWArgs,
@@ -22,7 +22,7 @@ def main():
 
     people_func_wrapper = JAImsFuncWrapper(
         function=store_people_info,
-        function_tool=JAImsToolDescriptor(
+        function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="store_people_info",
             description="this function MUST be used to store the result of the extraction into the database.",
             params_descriptors=[

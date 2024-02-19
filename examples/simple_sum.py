@@ -2,7 +2,7 @@ import json
 from jaims import (
     JAImsAgent,
     JAImsFuncWrapper,
-    JAImsToolDescriptor,
+    JAImsFunctionToolDescriptor,
     JAImsParamDescriptor,
     JAImsJsonSchemaType,
     JAImsOpenaiKWArgs,
@@ -51,7 +51,7 @@ def main():
 
     sum_func_wrapper = JAImsFuncWrapper(
         function=sum,
-        function_tool=JAImsToolDescriptor(
+        function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="sum",
             description="use this function when the user wants to sum two numbers",
             params_descriptors=[
@@ -71,7 +71,7 @@ def main():
 
     multiply_func_wrapper = JAImsFuncWrapper(
         function=multiply,
-        function_tool=JAImsToolDescriptor(
+        function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="multiply",
             description="use this function when the user wants to multiply two numbers",
             params_descriptors=[
@@ -91,7 +91,7 @@ def main():
 
     result_func_wrapper = JAImsFuncWrapper(
         function=store_sum,
-        function_tool=JAImsToolDescriptor(
+        function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="store_sum_result",
             description="this function MUST be called every time after a sum function is called to store its result.",
             params_descriptors=[
@@ -106,7 +106,7 @@ def main():
 
     result_multiply_func_wrapper = JAImsFuncWrapper(
         function=store_multiply,
-        function_tool=JAImsToolDescriptor(
+        function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="store_multiply_result",
             description="this function MUST be called every time after a multiply function is called to store its result.",
             params_descriptors=[
