@@ -206,6 +206,51 @@ class JAImsOpenaiKWArgs:
 
         return kwargs
 
+    def copy_with_overrides(
+        self,
+        model: Optional[JAImsGPTModel] = None,
+        messages: Optional[List[dict]] = None,
+        max_tokens: Optional[int] = None,
+        stream: Optional[bool] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[int] = None,
+        n: Optional[int] = None,
+        seed: Optional[int] = None,
+        frequency_penalty: Optional[float] = None,
+        presence_penalty: Optional[float] = None,
+        logit_bias: Optional[Dict[str, float]] = None,
+        response_format: Optional[Dict] = None,
+        stop: Optional[Union[str, List[str]]] = None,
+        tool_choice: Optional[Union[str, Dict]] = None,
+        tools: Optional[List[JAImsFuncWrapper]] = None,
+    ) -> JAImsOpenaiKWArgs:
+        """
+        Returns a new JAImsOpenaiKWArgs instance with the passed kwargs overridden.
+        """
+        return JAImsOpenaiKWArgs(
+            model=model if model else self.model,
+            messages=messages if messages else self.messages,
+            max_tokens=max_tokens if max_tokens else self.max_tokens,
+            stream=stream if stream else self.stream,
+            temperature=temperature if temperature else self.temperature,
+            top_p=top_p if top_p else self.top_p,
+            n=n if n else self.n,
+            seed=seed if seed else self.seed,
+            frequency_penalty=(
+                frequency_penalty if frequency_penalty else self.frequency_penalty
+            ),
+            presence_penalty=(
+                presence_penalty if presence_penalty else self.presence_penalty
+            ),
+            logit_bias=logit_bias if logit_bias else self.logit_bias,
+            response_format=(
+                response_format if response_format else self.response_format
+            ),
+            stop=stop if stop else self.stop,
+            tool_choice=tool_choice if tool_choice else self.tool_choice,
+            tools=tools if tools else self.tools,
+        )
+
 
 class JAImsOptions:
     """
@@ -253,6 +298,63 @@ class JAImsOptions:
         self.exponential_cap = exponential_cap
         self.jitter = jitter
         self.debug_stream_function_call = debug_stream_function_call
+
+    def copy_with_overrides(
+        self,
+        leading_prompts: Optional[List[Dict]] = None,
+        trailing_prompts: Optional[List[Dict]] = None,
+        max_consecutive_function_calls: Optional[int] = None,
+        optimize_context: Optional[bool] = None,
+        message_history_size: Optional[int] = None,
+        max_retries: Optional[int] = None,
+        retry_delay: Optional[int] = None,
+        exponential_base: Optional[int] = None,
+        exponential_delay: Optional[int] = None,
+        exponential_cap: Optional[int] = None,
+        jitter: Optional[bool] = None,
+        debug_stream_function_call: Optional[bool] = None,
+    ) -> JAImsOptions:
+        """
+        Returns a new JAImsOptions instance with the passed kwargs overridden.
+        """
+        return JAImsOptions(
+            leading_prompts=(
+                leading_prompts if leading_prompts else self.leading_prompts
+            ),
+            trailing_prompts=(
+                trailing_prompts if trailing_prompts else self.trailing_prompts
+            ),
+            max_consecutive_function_calls=(
+                max_consecutive_function_calls
+                if max_consecutive_function_calls
+                else self.max_consecutive_function_calls
+            ),
+            optimize_context=(
+                optimize_context if optimize_context else self.optimize_context
+            ),
+            message_history_size=(
+                message_history_size
+                if message_history_size
+                else self.message_history_size
+            ),
+            max_retries=max_retries if max_retries else self.max_retries,
+            retry_delay=retry_delay if retry_delay else self.retry_delay,
+            exponential_base=(
+                exponential_base if exponential_base else self.exponential_base
+            ),
+            exponential_delay=(
+                exponential_delay if exponential_delay else self.exponential_delay
+            ),
+            exponential_cap=(
+                exponential_cap if exponential_cap else self.exponential_cap
+            ),
+            jitter=jitter if jitter else self.jitter,
+            debug_stream_function_call=(
+                debug_stream_function_call
+                if debug_stream_function_call
+                else self.debug_stream_function_call
+            ),
+        )
 
 
 # ------------------------------------------
@@ -425,8 +527,8 @@ class JAImsFuncWrapper:
 
     def __init__(
         self,
-        function: Optional[Callable[..., Any]],
         function_tool_descriptor: JAImsFunctionToolDescriptor,
+        function: Optional[Callable[..., Any]] = None,
     ):
         self.function = function
         self.function_tool = function_tool_descriptor

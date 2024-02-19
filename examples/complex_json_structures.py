@@ -10,6 +10,12 @@ from jaims import (
 )
 
 
+"""
+This example shows a more complex use of JAImsParamDescriptor and JAImsFunctionToolDescriptor classes
+to teach how to structure data to obtain a more complex json structure.
+"""
+
+
 def store_people_info(people_data: list):
     print("----passed items----")
     print(people_data)

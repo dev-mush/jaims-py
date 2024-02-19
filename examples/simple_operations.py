@@ -10,6 +10,11 @@ from jaims import (
     JAImsTransactionStorageInterface,
 )
 
+"""
+This example shows how to perform parallel tool calls and how to use the 
+JAImsTransactionStorageInterface to store each transaction with the LLM.
+"""
+
 
 def sum(a: int, b: int):
     print("----performing sum----")

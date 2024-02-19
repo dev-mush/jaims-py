@@ -15,7 +15,7 @@ from jaims.openai_wrappers import (
     get_openai_response,
 )
 
-from jaims.function_handler import (
+from jaims.tool_handler import (
     JAImsToolHandler,
 )
 from jaims.history_manager import HistoryManager
@@ -52,9 +52,10 @@ class JAImsAgent:
 
     def __init__(
         self,
-        openai_kwargs: JAImsOpenaiKWArgs = JAImsOpenaiKWArgs(),
-        options: JAImsOptions = JAImsOptions(),
+        openai_kwargs: Optional[JAImsOpenaiKWArgs] = None,
+        options: Optional[JAImsOptions] = None,
         openai_api_key: Optional[str] = None,
+        tool_handler: Optional[JAImsToolHandler] = None,
         transaction_storage: Optional[JAImsTransactionStorageInterface] = None,
     ):
         openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
@@ -62,11 +63,11 @@ class JAImsAgent:
             raise JAImsMissingOpenaiAPIKeyException()
         openai.api_key = openai_api_key
 
-        self.__openai_kwargs = openai_kwargs
-        self.__options = options
+        self.__openai_kwargs = openai_kwargs or JAImsOpenaiKWArgs()
+        self.__options = options or JAImsOptions()
         self.__expense = JAImsAgent.__init_expense_dictionary()
         self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
-        self.__function_handler = JAImsToolHandler()
+        self.__function_handler = tool_handler or JAImsToolHandler()
         self.__history_manager = HistoryManager()
 
         if self.__openai_kwargs.messages:
@@ -208,6 +209,8 @@ class JAImsAgent:
             tools_results = self.__function_handler.handle_tool_calls(
                 tool_calls=message_dict.get("tool_calls", []),
                 function_wrappers=self.__openai_kwargs.tools or [],
+                current_kwargs=self.__openai_kwargs,
+                current_options=self.__options,
             )
 
             if tools_results.override_kwargs:

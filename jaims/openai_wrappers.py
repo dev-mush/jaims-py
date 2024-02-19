@@ -9,7 +9,6 @@ import tiktoken
 import logging
 import random
 
-from jaims.function_handler import JAImsFuncWrapper
 from jaims.entities import JAImsOpenaiKWArgs, JAImsOptions, JAImsGPTModel
 
 

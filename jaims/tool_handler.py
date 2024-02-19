@@ -4,6 +4,8 @@ from typing import Any, List, Dict
 from jaims.entities import (
     JAImsFuncWrapper,
     JAImsFunctionToolResponse,
+    JAImsOpenaiKWArgs,
+    JAImsOptions,
     JAImsToolResults,
     JAImsUnexpectedFunctionCall,
 )
@@ -20,6 +22,8 @@ class JAImsToolHandler:
         self,
         tool_calls: List[Dict[str, Any]],
         function_wrappers: List[JAImsFuncWrapper],
+        current_kwargs: JAImsOpenaiKWArgs,
+        current_options: JAImsOptions,
     ) -> JAImsToolResults:
         """
         Called by the agent when it is necessary to handle tool calls.
