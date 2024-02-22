@@ -232,7 +232,7 @@ class JAImsFunctionHandler:
                 {
                     "tool_call_id": tool_call_id,
                     "name": function_name,
-                    "args": json.loads(function_args) if function_args else {},
+                    "args": json.loads(function_args, strict=False) if function_args else {},
                 }
             )
 
