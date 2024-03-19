@@ -34,6 +34,9 @@ class JAImsGPTModel(Enum):
     GPT_4_0613 = ("gpt-4-0613", 8192, 0.03, 0.06)
     GPT_4_32K_0613 = ("gpt-4-32k-0613", 32768, 0.06, 0.12)
     GPT_4_1106_PREVIEW = ("gpt-4-1106-preview", 128000, 0.01, 0.03)
+    GPT_4_0125_PREVIEW = ("gpt-4-0125-preview", 128000, 0.01, 0.03)
+    GPT_4_TURBO_PREVIEW = ("gpt-4-turbo-preview", 128000, 0.01, 0.03)
+    GPT_4_1106_VISION_PREVIEW = ("gpt-4-1106-vision-preview", 128000, 0.01, 0.03)
     GPT_4_VISION_PREVIEW = ("gpt-4-vision-preview", 128000, 0.01, 0.03)
 
     def __init__(self, string, max_tokens, price_1k_tokens_in, price_1k_tokens_out):
