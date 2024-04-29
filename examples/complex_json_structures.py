@@ -1,6 +1,6 @@
 from jaims import (
     JAImsAgent,
-    JAImsFuncWrapper,
+    JAImsFunctionTool,
     JAImsParamDescriptor,
     JAImsFunctionToolDescriptor,
     JAImsJsonSchemaType,
@@ -26,7 +26,7 @@ def store_people_info(people_data: list):
 def main():
     stream = True
 
-    people_func_wrapper = JAImsFuncWrapper(
+    people_func_wrapper = JAImsFunctionTool(
         function=store_people_info,
         function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="store_people_info",

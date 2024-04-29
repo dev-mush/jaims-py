@@ -5,356 +5,111 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
 
-# ---------
-# constants
-# ---------
+# -------------------------
+# LLM Messaging Abstraction
+# -------------------------
 
 
-DEFAULT_MAX_TOKENS = 1024
-MAX_CONSECUTIVE_CALLS = 10
-
-# ---------------------
-# openai / LLM modeling
-# ---------------------
-
-
-class JAImsGPTModel(Enum):
-    """
-    The OPENAI GPT models available.
-    Only those that support functions are listed, so just:
-    gpt-3.5-turbo-0613, gpt-3-5-turbo-16k-0613, gpt-4-0613
-    """
-
-    GPT_3_5_TURBO = ("gpt-3.5-turbo", 4096, 0.0015, 0.002)
-    GPT_3_5_TURBO_16K = ("gpt-3.5-turbo-16k", 16384, 0.003, 0.004)
-    GPT_3_5_TURBO_0613 = ("gpt-3.5-turbo-0613", 4096, 0.0015, 0.002)
-    GPT_3_5_TURBO_16K_0613 = ("gpt-3.5-turbo-16k-0613", 16384, 0.003, 0.004)
-    GPT_3_5_TURBO_1106 = ("gpt-3.5-turbo-1106", 16385, 0.001, 0.002)
-    GPT_4 = ("gpt-4", 8192, 0.03, 0.06)
-    GPT_4_32K = ("gpt-4-32k", 32768, 0.06, 0.12)
-    GPT_4_0613 = ("gpt-4-0613", 8192, 0.03, 0.06)
-    GPT_4_32K_0613 = ("gpt-4-32k-0613", 32768, 0.06, 0.12)
-    GPT_4_1106_PREVIEW = ("gpt-4-1106-preview", 128000, 0.01, 0.03)
-    GPT_4_VISION_PREVIEW = ("gpt-4-vision-preview", 128000, 0.01, 0.03)
-
-    def __init__(self, string, max_tokens, price_1k_tokens_in, price_1k_tokens_out):
-        self.string = string
-        self.max_tokens = max_tokens
-        self.price_1k_tokens_in = price_1k_tokens_in
-        self.price_1k_tokens_out = price_1k_tokens_out
-
-    def __str__(self):
-        return self.string
+class JAImsToolCall:
+    def __init__(self, id: str, tool_name: str, tool_args: Optional[Dict[str, Any]]):
+        self.id = id
+        self.tool_name = tool_name
+        self.tool_args = tool_args
 
 
-class JAImsTokensExpense:
-    """
-    Tracks the number of tokens spent on a job and on which GPTModel.
-    """
+class JAImsToolResponse:
+    def __init__(self, tool_call_id: str, tool_name: str, response: Any):
+        self.tool_call_id = tool_call_id
+        self.tool_name = tool_name
+        self.response = response
 
+
+class JAImsContentTypes(Enum):
+    TEXT = "text"
+    IMAGE = "image"
+
+
+class JAImsMessageContent:
+    def __init__(self, content: Any, type: JAImsContentTypes) -> None:
+        self.type = type
+        self.content = content
+
+
+class JAImsMessageRole(Enum):
+    USER = "user"
+    ASSISTANT = "assistant"
+    TOOL = "tool"
+    SYSTEM = "system"
+
+
+class JAImsMessage:
     def __init__(
         self,
-        gpt_model: JAImsGPTModel,
-        prompt_tokens=0,
-        completion_tokens=0,
-        total_tokens=0,
-        rough_estimate=False,
+        role: JAImsMessageRole,
+        contents: Optional[List[JAImsMessageContent]] = None,
+        text: Optional[str] = None,
+        name: Optional[str] = None,
+        tool_calls: Optional[List[JAImsToolCall]] = None,
+        tool_responses: Optional[List[JAImsToolResponse]] = None,
+        raw: Optional[Any] = None,
     ):
-        self.gpt_model = gpt_model
-        self.prompt_tokens = prompt_tokens
-        self.completion_tokens = completion_tokens
-        self.total_tokens = total_tokens
-        self.rough_estimate = rough_estimate
+        self.role = role
+        self.contents = contents
+        self.text = text
+        self.name = name
+        self.tool_calls = tool_calls
+        self.tool_responses = tool_responses
+        self.raw = raw
+
+    # -------------------------
+    # convenience constructors
+    # -------------------------
 
     @staticmethod
-    def from_openai_usage_dictionary(
-        gpt_model: JAImsGPTModel, dictionary: dict
-    ) -> JAImsTokensExpense:
-        return JAImsTokensExpense(
-            gpt_model=gpt_model,
-            prompt_tokens=dictionary["prompt_tokens"],
-            completion_tokens=dictionary["completion_tokens"],
-            total_tokens=dictionary["total_tokens"],
+    def user_message(text: str) -> JAImsMessage:
+        return JAImsMessage(
+            role=JAImsMessageRole.USER,
+            contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
+            text=text,
         )
 
-    def spend(self, prompt_tokens, completion_tokens, total_tokens):
-        self.prompt_tokens += prompt_tokens
-        self.completion_tokens += completion_tokens
-        self.total_tokens += total_tokens
-
-    def add_from(self, other_expense: JAImsTokensExpense):
-        self.prompt_tokens += other_expense.prompt_tokens
-        self.completion_tokens += other_expense.completion_tokens
-        self.total_tokens += other_expense.total_tokens
-        if other_expense.rough_estimate:
-            self.rough_estimate = True  # becomes rough if summed with something rough
-
-    def get_cost(self):
-        return (self.prompt_tokens / 1000) * self.gpt_model.price_1k_tokens_in + (
-            self.completion_tokens / 1000
-        ) * self.gpt_model.price_1k_tokens_out
-
-    def __str__(self):
-        string_repr = (
-            f"GPT model: {self.gpt_model}\n"
-            f"Prompt tokens: {self.prompt_tokens}\n"
-            f"Completion tokens: {self.completion_tokens}\n"
-            f"Total tokens: {self.total_tokens}\n"
-            f"Cost: {round(self.get_cost(),4)}$"
+    @staticmethod
+    def assistant_message(text: str) -> JAImsMessage:
+        return JAImsMessage(
+            role=JAImsMessageRole.ASSISTANT,
+            contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
+            text=text,
         )
 
-        if self.rough_estimate:
-            string_repr += "\n(warning: rough estimate)"
+    @staticmethod
+    def system_message(text: str) -> JAImsMessage:
+        return JAImsMessage(
+            role=JAImsMessageRole.SYSTEM,
+            contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
+            text=text,
+        )
 
-        return string_repr
+    @staticmethod
+    def tool_response_message(
+        tool_call_id: str, tool_name: str, response: Any
+    ) -> JAImsMessage:
+        return JAImsMessage(
+            role=JAImsMessageRole.TOOL,
+            tool_responses=[JAImsToolResponse(tool_call_id, tool_name, response)],
+        )
 
-    def to_json(self):
-        return {
-            "model": self.gpt_model.string,
-            "prompt_tokens": self.prompt_tokens,
-            "completion_tokens": self.completion_tokens,
-            "total_tokens": self.total_tokens,
-            "cost": self.get_cost(),
-            "rough_estimate": self.rough_estimate,
-        }
-
-
-class JAImsOpenaiKWArgs:
-    """
-    Represents the keyword arguments for the JAIms OpenAI wrapper.
-    This class entirely mirrors the openai API parameters, so refer to it for documentation.
-    (https://platform.openai.com/docs/api-reference/chat/create).
-
-    Args:
-        model (JAImsGPTModel, optional): The OpenAI model to use. Defaults to JAImsGPTModel.GPT_3_5_TURBO.
-        messages (List[dict], optional): The list of messages for the chat completion. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them. If passed, they will always be appended to the messages passed in the run method.
-        max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 500.
-        stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
-        temperature (float, optional): The temperature for generating creative text. Defaults to 0.0.
-        top_p (Optional[int], optional): The top-p value for nucleus sampling. Defaults to None.
-        n (int, optional): The number of responses to generate. Defaults to 1.
-        seed (Optional[int], optional): The seed to be passed to openai to have more consistent outputs. Defaults to None.
-        frequency_penalty (float, optional): The frequency penalty for avoiding repetitive responses. Defaults to 0.0.
-        presence_penalty (float, optional): The presence penalty for encouraging diverse responses. Defaults to 0.0.
-        logit_bias (Optional[Dict[str, float]], optional): The logit bias for influencing the model's output. Defaults to None.
-        response_format (Optional[Dict], optional): The format for the generated response. Defaults to None.
-        stop (Union[Optional[str], Optional[List[str]]], optional): The stop condition for the generated response. Defaults to None.
-        tool_choice (Union[str, Dict], optional): The choice of tool to use. Defaults to "auto".
-        tools (Optional[List[JAImsFunctionToolWrapper]], optional): The list of function tool wrappers to use. Defaults to None.
-    """
-
-    def __init__(
-        self,
-        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
-        messages: List[dict] = [],
-        max_tokens: int = DEFAULT_MAX_TOKENS,
-        stream: bool = False,
-        temperature: float = 0.0,
-        top_p: Optional[int] = None,
-        n: int = 1,
-        seed: Optional[int] = None,
-        frequency_penalty: float = 0.0,
-        presence_penalty: float = 0.0,
-        logit_bias: Optional[Dict[str, float]] = None,
-        response_format: Optional[Dict] = None,
-        stop: Union[Optional[str], Optional[List[str]]] = None,
-        tool_choice: Union[str, Dict] = "auto",
-        tools: Optional[List[JAImsFuncWrapper]] = None,
-    ):
-        self.model = model
-        self.messages = messages
-        self.max_tokens = max_tokens
-        self.stream = stream
-        self.temperature = temperature
-        self.top_p = top_p
-        self.n = n
-        self.seed = seed
-        self.frequency_penalty = frequency_penalty
-        self.presence_penalty = presence_penalty
-        self.logit_bias = logit_bias
-        self.response_format = response_format
-        self.stop = stop
-        self.tool_choice = tool_choice
-        self.tools = tools
-
-    def to_dict(self):
-        kwargs = {
-            "model": self.model.string,
-            "temperature": self.temperature,
-            "n": self.n,
-            "stream": self.stream,
-            "messages": self.messages,
-            "top_p": self.top_p,
-            "max_tokens": self.max_tokens,
-            "seed": self.seed,
-            "frequency_penalty": self.frequency_penalty,
-            "presence_penalty": self.presence_penalty,
-            "response_format": self.response_format,
-            "stop": self.stop,
-        }
-
-        kwargs = {key: value for key, value in kwargs.items() if value is not None}
-
-        if self.logit_bias:
-            kwargs["logit_bias"] = self.logit_bias
-
-        if self.tools:
-            kwargs["tools"] = [
-                tool.function_tool.to_openai_function_tool() for tool in self.tools
-            ]
-            kwargs["tool_choice"] = self.tool_choice
-
-        return kwargs
-
-    def copy_with_overrides(
-        self,
-        model: Optional[JAImsGPTModel] = None,
-        messages: Optional[List[dict]] = None,
-        max_tokens: Optional[int] = None,
-        stream: Optional[bool] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[int] = None,
-        n: Optional[int] = None,
-        seed: Optional[int] = None,
-        frequency_penalty: Optional[float] = None,
-        presence_penalty: Optional[float] = None,
-        logit_bias: Optional[Dict[str, float]] = None,
-        response_format: Optional[Dict] = None,
-        stop: Optional[Union[str, List[str]]] = None,
-        tool_choice: Optional[Union[str, Dict]] = None,
-        tools: Optional[List[JAImsFuncWrapper]] = None,
-    ) -> JAImsOpenaiKWArgs:
-        """
-        Returns a new JAImsOpenaiKWArgs instance with the passed kwargs overridden.
-        """
-        return JAImsOpenaiKWArgs(
-            model=model if model else self.model,
-            messages=messages if messages else self.messages,
-            max_tokens=max_tokens if max_tokens else self.max_tokens,
-            stream=stream if stream else self.stream,
-            temperature=temperature if temperature else self.temperature,
-            top_p=top_p if top_p else self.top_p,
-            n=n if n else self.n,
-            seed=seed if seed else self.seed,
-            frequency_penalty=(
-                frequency_penalty if frequency_penalty else self.frequency_penalty
-            ),
-            presence_penalty=(
-                presence_penalty if presence_penalty else self.presence_penalty
-            ),
-            logit_bias=logit_bias if logit_bias else self.logit_bias,
-            response_format=(
-                response_format if response_format else self.response_format
-            ),
-            stop=stop if stop else self.stop,
-            tool_choice=tool_choice if tool_choice else self.tool_choice,
-            tools=tools if tools else self.tools,
+    @staticmethod
+    def tool_call_message(tool_calls: List[JAImsToolCall]) -> JAImsMessage:
+        return JAImsMessage(
+            role=JAImsMessageRole.ASSISTANT,
+            tool_calls=tool_calls,
         )
 
 
-class JAImsOptions:
-    """
-    Represents the options for JAImsAgent.
-
-    Args:
-        leading_prompts (Optional[List[Dict]]): A list of leading prompts, these will be always prepended to the history for each run.
-        trailing_prompts (Optional[List[Dict]]): A list of trailing promptsm, these will be always appended to the history for each run.
-        max_consecutive_function_calls (int): The maximum number of consecutive function calls allowed (defaults to 10 to avoid infinite loops).
-        optimize_context (bool): Whether to optimize the context in the history manager or not, defaults to True.
-        message_history_size (Optional[int]): The size of the message history for each run, only the last n messages will be passed, defaults to none (every message is passed until optimization starts).
-        max_retries (int): The maximum number of retries after a failing openai call.
-        retry_delay (int): The delay between each retry.
-        exponential_base (int): The base for exponential backoff calculation.
-        exponential_delay (int): The initial delay for exponential backoff.
-        exponential_cap (Optional[int]): The maximum delay for exponential backoff.
-        jitter (bool): Whether to add jitter to the delay (to avoid concurrent firing).
-        debug_stream_function_call (bool): Prints the arguments streamed by OpenAI during function call when streaming enabled.
-    """
-
-    def __init__(
-        self,
-        leading_prompts: Optional[List[Dict]] = None,
-        trailing_prompts: Optional[List[Dict]] = None,
-        max_consecutive_function_calls: int = MAX_CONSECUTIVE_CALLS,
-        optimize_context: bool = False,
-        message_history_size: Optional[int] = None,
-        max_retries=15,
-        retry_delay=10,
-        exponential_base: int = 2,
-        exponential_delay: int = 1,
-        exponential_cap: Optional[int] = None,
-        jitter: bool = True,
-        debug_stream_function_call=False,
-    ):
-        self.leading_prompts = leading_prompts
-        self.trailing_prompts = trailing_prompts
-        self.max_consecutive_function_calls = max_consecutive_function_calls
-        self.optimize_context = optimize_context
-        self.message_history_size = message_history_size
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        self.exponential_base = exponential_base
-        self.exponential_delay = exponential_delay
-        self.exponential_cap = exponential_cap
-        self.jitter = jitter
-        self.debug_stream_function_call = debug_stream_function_call
-
-    def copy_with_overrides(
-        self,
-        leading_prompts: Optional[List[Dict]] = None,
-        trailing_prompts: Optional[List[Dict]] = None,
-        max_consecutive_function_calls: Optional[int] = None,
-        optimize_context: Optional[bool] = None,
-        message_history_size: Optional[int] = None,
-        max_retries: Optional[int] = None,
-        retry_delay: Optional[int] = None,
-        exponential_base: Optional[int] = None,
-        exponential_delay: Optional[int] = None,
-        exponential_cap: Optional[int] = None,
-        jitter: Optional[bool] = None,
-        debug_stream_function_call: Optional[bool] = None,
-    ) -> JAImsOptions:
-        """
-        Returns a new JAImsOptions instance with the passed kwargs overridden.
-        """
-        return JAImsOptions(
-            leading_prompts=(
-                leading_prompts if leading_prompts else self.leading_prompts
-            ),
-            trailing_prompts=(
-                trailing_prompts if trailing_prompts else self.trailing_prompts
-            ),
-            max_consecutive_function_calls=(
-                max_consecutive_function_calls
-                if max_consecutive_function_calls
-                else self.max_consecutive_function_calls
-            ),
-            optimize_context=(
-                optimize_context if optimize_context else self.optimize_context
-            ),
-            message_history_size=(
-                message_history_size
-                if message_history_size
-                else self.message_history_size
-            ),
-            max_retries=max_retries if max_retries else self.max_retries,
-            retry_delay=retry_delay if retry_delay else self.retry_delay,
-            exponential_base=(
-                exponential_base if exponential_base else self.exponential_base
-            ),
-            exponential_delay=(
-                exponential_delay if exponential_delay else self.exponential_delay
-            ),
-            exponential_cap=(
-                exponential_cap if exponential_cap else self.exponential_cap
-            ),
-            jitter=jitter if jitter else self.jitter,
-            debug_stream_function_call=(
-                debug_stream_function_call
-                if debug_stream_function_call
-                else self.debug_stream_function_call
-            ),
-        )
+class JAImsStreamingMessage:
+    def __init__(self, message: JAImsMessage, textDelta: Optional[str] = None):
+        self.message = message
+        self.textDelta = textDelta
 
 
 # ------------------------------------------
@@ -474,16 +229,6 @@ class JAImsFunctionToolDescriptor:
         self.description = description
         self.params_descriptors = params_descriptors
 
-    def to_openai_function_tool(self):
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": self.description,
-                "parameters": self.get_jsonapi_schema(),
-            },
-        }
-
     def get_jsonapi_schema(self) -> Dict[str, Any]:
         """
         Returns the jsonapi schema for function.
@@ -502,7 +247,7 @@ class JAImsFunctionToolDescriptor:
         return schema
 
 
-class JAImsFuncWrapper:
+class JAImsFunctionTool:
     """
     Wraps a function tool used by the LLM along with a function to be called locally when
     the tool is invoked by the LLM.
@@ -533,7 +278,7 @@ class JAImsFuncWrapper:
         self.function = function
         self.function_tool = function_tool_descriptor
 
-    def call(self, params: Dict[str, Any]) -> Any:
+    def call(self, params: Optional[Dict[str, Any]]) -> Any:
         """
         Calls the wrapped function with the passed parameters if the function is not None.
         Returns None otherwise.
@@ -543,79 +288,8 @@ class JAImsFuncWrapper:
             params : dict
                 the parameters passed to the wrapped function
         """
-        return self.function(**params) if self.function else None
 
-
-class JAImsFunctionToolResponse:
-    """
-    This class offers a way to interact with the agent to trigger events after a tool is called.
-    It can be used as a response from a tool call.
-    It is not mandatory, return this class from your function tools if you want to interact with the agent to alter the flow of the execution.
-
-    Attributes
-    ----------
-        content : Any
-            the content of the response to be sent to the LLM
-        stop: bool
-            Whether the tool call should stop the current execution or not, defaults to False.
-            This is meant to be used when the tool calling is set to "auto" and it is necessary to
-            stop the current execution but, in case of parallel tool calling, all the other tools should be called regardless.
-            The net result is that the result of each tool call won't be sent back to the LLM and not tracked in the history.
-        halt: bool
-            Whether the tool call should stop the current execution or not, defaults to False.
-            This is meant to be used when the tool calling is set to "auto" and it is necessary to stop the current execution abruptly.
-            This means that in the context of parallel tool calling, as soon as the halt is set to True, all subsequent tool calls are not executed and the current run will terminate.
-            The net result is that the result of each tool call won't be sent back to the LLM and not tracked in the history.
-        override_kwargs: JAImsOpenaiKWArgs (optional)
-            The kwargs to be used to override the current kwargs when giving tool results back to the LLM.
-            If parallel tools are called in the same iteration and more than one sets an override_kwargs, the last override_kwargs will be used since, by design, the results are sent back to the LLM in batch.
-            Useful for instance to update the model version, the token size or the temperature.
-        override_options: JAImsOptions (optional)
-            The options to be used to override the current options when giving tool results back to the LLM.
-            If parallel tools are called in the same iteration and each sets an override_options, the last override_options will be used since, by design, the results are sent back to the LLM in batch.
-            Useful for instance to update the static leading and trailing prompts, finetune the max consecutive calls allowed and so on.
-    """
-
-    def __init__(
-        self,
-        content: Any,
-        halt: bool = False,
-        override_kwargs: Optional[JAImsOpenaiKWArgs] = None,
-        override_options: Optional[JAImsOptions] = None,
-    ):
-        self.content = content
-        self.halt = halt
-        self.override_kwargs = override_kwargs
-        self.override_options = override_options
-
-
-class JAImsToolResults:
-    """
-    Passed by the tool handler delegate to the agent to push the results of the tool calls back to the LLM or to stop the current execution.
-
-    Attributes
-    ----------
-        function_result_messages: List[Any]
-            the list of function tool result messages to be sent to the LLM
-        stop: bool
-            Wether the agent should stop the current execution or not, defaults to False.
-        override_kwargs: JAImsOpenaiKWArgs (optional)
-            Kwargs to be used to override the current kwargs when giving tool results back to the LLM.
-        override_options: JAImsOptions (optional)
-            Options to be used to override the current options when giving tool results back to the LLM.
-    """
-
-    def __init__(
-        self,
-        function_result_messages: List[Any],
-        stop: bool = False,
-        override_kwargs: Optional[JAImsOpenaiKWArgs] = None,
-        override_options: Optional[JAImsOptions] = None,
-    ):
-        self.function_result_messages = function_result_messages
-        self.stop = stop
-        self.override_kwargs = override_kwargs
-        self.override_options = override_options
+        return self.function(**params) if params and self.function else None
 
 
 # ----------

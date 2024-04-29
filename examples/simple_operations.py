@@ -1,7 +1,7 @@
 import json
 from jaims import (
     JAImsAgent,
-    JAImsFuncWrapper,
+    JAImsFunctionTool,
     JAImsFunctionToolDescriptor,
     JAImsParamDescriptor,
     JAImsJsonSchemaType,
@@ -54,7 +54,7 @@ class MockTransactionStorage(JAImsTransactionStorageInterface):
 def main():
     stream = False
 
-    sum_func_wrapper = JAImsFuncWrapper(
+    sum_func_wrapper = JAImsFunctionTool(
         function=sum,
         function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="sum",
@@ -74,7 +74,7 @@ def main():
         ),
     )
 
-    multiply_func_wrapper = JAImsFuncWrapper(
+    multiply_func_wrapper = JAImsFunctionTool(
         function=multiply,
         function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="multiply",
@@ -94,7 +94,7 @@ def main():
         ),
     )
 
-    result_func_wrapper = JAImsFuncWrapper(
+    result_func_wrapper = JAImsFunctionTool(
         function=store_sum,
         function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="store_sum_result",
@@ -109,7 +109,7 @@ def main():
         ),
     )
 
-    result_multiply_func_wrapper = JAImsFuncWrapper(
+    result_multiply_func_wrapper = JAImsFunctionTool(
         function=store_multiply,
         function_tool_descriptor=JAImsFunctionToolDescriptor(
             name="store_multiply_result",

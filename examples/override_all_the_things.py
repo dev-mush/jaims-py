@@ -2,14 +2,14 @@ import json
 from typing import Any, Dict, List
 from jaims import (
     JAImsAgent,
-    JAImsFuncWrapper,
+    JAImsFunctionTool,
     JAImsParamDescriptor,
     JAImsFunctionToolDescriptor,
     JAImsJsonSchemaType,
     JAImsGPTModel,
     JAImsOpenaiKWArgs,
     JAImsOptions,
-    JAImsToolHandler,
+    JAImsDefaultToolManager,
     JAImsToolResults,
 )
 
@@ -20,12 +20,12 @@ in between agent runs.
 """
 
 
-class MyCustomToolHandler(JAImsToolHandler):
+class MyCustomToolHandler(JAImsDefaultToolManager):
 
     def handle_tool_calls(
         self,
         tool_calls: List[Dict[str, Any]],
-        function_wrappers: List[JAImsFuncWrapper],
+        function_wrappers: List[JAImsFunctionTool],
         current_kwargs: JAImsOpenaiKWArgs,
         current_options: JAImsOptions,
     ) -> JAImsToolResults:
@@ -75,7 +75,7 @@ class MyCustomToolHandler(JAImsToolHandler):
 def main():
     stream = False
 
-    echo_wrapper = JAImsFuncWrapper(
+    echo_wrapper = JAImsFunctionTool(
         JAImsFunctionToolDescriptor(
             name="echo",
             description="use this function when the user asks you to echo some string",
@@ -89,7 +89,7 @@ def main():
         ),
     )
 
-    reverse_wrapper = JAImsFuncWrapper(
+    reverse_wrapper = JAImsFunctionTool(
         JAImsFunctionToolDescriptor(
             name="reverse",
             description="use this function when the user asks you to reverse some string",
@@ -103,7 +103,7 @@ def main():
         ),
     )
 
-    change_model_wrapper = JAImsFuncWrapper(
+    change_model_wrapper = JAImsFunctionTool(
         JAImsFunctionToolDescriptor(
             name="change_model",
             description="use this function when the user asks you to change the current model",
@@ -111,7 +111,7 @@ def main():
         ),
     )
 
-    stop_operations_wrapper = JAImsFuncWrapper(
+    stop_operations_wrapper = JAImsFunctionTool(
         JAImsFunctionToolDescriptor(
             name="stop_operations",
             description="use this function when the user asks you to stop all the operations",
@@ -138,7 +138,7 @@ def main():
                 stop_operations_wrapper,
             ],
         ),
-        tool_handler=MyCustomToolHandler(),
+        tool_manager=MyCustomToolHandler(),
     )
 
     print("Hello, I am JAIms, your personal assistant.")
