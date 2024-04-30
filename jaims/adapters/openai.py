@@ -1,8 +1,10 @@
-# TODO: Tokenizer history optimizer
-# TODO: Add dumper
 from __future__ import annotations
+import base64
+from abc import ABC, abstractmethod
+from io import BytesIO
 import json
 from enum import Enum
+from math import ceil
 import time
 from typing import Generator, Union
 import openai
@@ -14,8 +16,9 @@ import tiktoken
 import logging
 import random
 from typing import List, Optional, Dict
+from PIL import Image
 
-from ..interfaces import JAImsLLMInterface
+from ..interfaces import JAImsLLMInterface, JAImsHistoryOptimizer
 from ..entities import (
     JAImsMessage,
     JAImsStreamingMessage,
@@ -254,18 +257,108 @@ class JAImsOptions:
         )
 
 
-def estimate_token_count(string: str, model: JAImsGPTModel) -> int:
-    """Returns the number of tokens in a text string."""
-
-    encoding = tiktoken.encoding_for_model(model.string)
-    num_tokens = len(encoding.encode(string))
-    return num_tokens
-
-
 class ErrorHandlingMethod(Enum):
     FAIL = "fail"
     RETRY = "retry"
     EXPONENTIAL_BACKOFF = "exponential_backoff"
+
+
+class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
+    def __init__(
+        self,
+        options: JAImsOptions,
+        openai_kwargs: JAImsOpenaiKWArgs,
+        history_max_tokens: int,
+        model: JAImsGPTModel,
+    ):
+        self.options = options
+        self.openai_kwargs = openai_kwargs
+        self.history_max_tokens = history_max_tokens
+        self.model = model
+
+    def optimize_history(self, messages: List[JAImsMessage]) -> List:
+
+        # Copying the whole history to avoid altering the original one
+        buffer = messages.copy()
+
+        # calculate the tokens for the compound history
+        messages_tokens = self.__tokens_from_messages(buffer, self.model)
+
+        while messages_tokens > self.history_max_tokens:
+            if not buffer:
+                raise Exception(
+                    f"Unable to fit messages with current max tokens {self.history_max_tokens}."
+                )
+            # Popping the first (oldest) message from the chat history between the user and agent
+            buffer.pop(0)
+            # Recalculating the tokens for the compound history
+            messages_tokens = self.__tokens_from_messages(buffer, self.model)
+
+        return buffer
+
+    def __estimate_token_count(self, string: str, model: JAImsGPTModel) -> int:
+        """Returns the number of tokens in a text string."""
+
+        encoding = tiktoken.encoding_for_model(model.string)
+        num_tokens = len(encoding.encode(string))
+        return num_tokens
+
+    def __estimate_image_tokens_count(self, width: int, height: int):
+        h = ceil(height / 512)
+        w = ceil(width / 512)
+        n = w * h
+        total = 85 + 170 * n
+        return total
+
+    def __tokens_from_messages(self, messages: List[JAImsMessage], model):
+        """Returns the number of tokens used by a list of messages."""
+
+        images = []
+        parsed = []
+        for message in messages:
+            if message.contents:
+                for item in message.contents:
+                    if (
+                        item.type == JAImsContentTypes.IMAGE
+                        and item.content.startswith("data:image/jpeg;base64,")
+                    ):
+                        images.append(
+                            item.content.copy().replace("data:image/jpeg;base64,", "")
+                        )
+                    else:
+                        parsed.append(item.content)
+
+            if message.tool_calls:
+                for tool_call in message.tool_calls:
+                    parsed.append(tool_call.tool_name + json.dumps(tool_call.tool_args))
+
+            if message.tool_responses:
+                for tool_response in message.tool_responses:
+                    parsed.append(tool_response.response)
+
+        image_tokens = 0
+        for image in images:
+            width, height = self.__get_image_size_from_base64(image)
+            image_tokens += self.__estimate_image_tokens_count(width, height)
+
+        return self.__estimate_token_count(json.dumps(parsed), model) + image_tokens
+
+    def __get_image_size_from_base64(self, base64_string):
+        image_data = base64.b64decode(base64_string)
+        image = Image.open(BytesIO(image_data))
+
+        return image.size
+
+
+class JAImsTransactionStorageInterface(ABC):
+    """
+    Interface for storing LLM transactions.
+    Override this class to implement your own storage, to store a pair of LLM request and response payloads.
+    """
+
+    @abstractmethod
+    def store_transaction(self, request: dict, response: dict):
+        pass
 
 
 class JAImsOpenaiAdapter(JAImsLLMInterface):
@@ -278,6 +371,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         kwargs: Optional[JAImsOpenaiKWArgs] = None,
+        transaction_storage: Optional[JAImsTransactionStorageInterface] = None,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
@@ -285,6 +379,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         self.options = options or JAImsOptions()
         self.kwargs = kwargs or JAImsOpenaiKWArgs()
+        self.transaction_storage = transaction_storage
 
     def call(
         self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
@@ -320,6 +415,12 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             )
             yield self.__openai_chat_completion_choice_delta_to_jaims_message(
                 accumulated_delta, completion_chunk
+            )
+
+        if self.transaction_storage and accumulated_delta:
+            self.transaction_storage.store_transaction(
+                request=openai_kw_args.to_dict(),
+                response=accumulated_delta.model_dump(exclude_none=True),
             )
 
     def __jaims_messages_to_openai(self, messages: List[JAImsMessage]) -> List[dict]:
