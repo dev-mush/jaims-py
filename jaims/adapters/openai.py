@@ -1,12 +1,14 @@
 # TODO: Tokenizer history optimizer
+# TODO: Add dumper
 from __future__ import annotations
 import json
 from enum import Enum
 import time
-from typing import Union
+from typing import Generator, Union
 import openai
 from openai import OpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
+from openai.types.chat.chat_completion_chunk import ChoiceDelta, ChoiceDeltaToolCall
 from openai import Stream
 import tiktoken
 import logging
@@ -16,10 +18,10 @@ from typing import List, Optional, Dict
 from ..interfaces import JAImsLLMInterface
 from ..entities import (
     JAImsMessage,
+    JAImsStreamingMessage,
     JAImsMessageContent,
     JAImsContentTypes,
     JAImsToolCall,
-    JAImsToolResponse,
     JAImsFunctionTool,
     JAImsMessageRole,
 )
@@ -32,7 +34,7 @@ import os
 
 class JAImsGPTModel(Enum):
     """
-    The OPENAI GPT models available.
+    The OPENAI Chat GPT models available.
     """
 
     GPT_3_5_TURBO = ("gpt-3.5-turbo", 4096)
@@ -266,22 +268,6 @@ class ErrorHandlingMethod(Enum):
     EXPONENTIAL_BACKOFF = "exponential_backoff"
 
 
-def __handle_openai_error(error: openai.OpenAIError) -> ErrorHandlingMethod:
-    # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
-    # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
-    error_handling_map = {
-        openai.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
-        openai.InternalServerError: ErrorHandlingMethod.RETRY,
-        openai.APITimeoutError: ErrorHandlingMethod.RETRY,
-    }
-
-    for error_type, error_handling_method in error_handling_map.items():
-        if isinstance(error, error_type):
-            return error_handling_method
-
-    return ErrorHandlingMethod.FAIL
-
-
 class JAImsOpenaiAdapter(JAImsLLMInterface):
     """
     The JAIms OpenAI adapter.
@@ -293,12 +279,48 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         options: Optional[JAImsOptions] = None,
         kwargs: Optional[JAImsOpenaiKWArgs] = None,
     ):
-        openai_api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
             raise Exception("OpenAI API key not provided.")
-        openai.api_key = openai_api_key
+
         self.options = options or JAImsOptions()
         self.kwargs = kwargs or JAImsOpenaiKWArgs()
+
+    def call(
+        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+    ) -> JAImsMessage:
+        openai_messages = self.__jaims_messages_to_openai(messages)
+        openai_tools = self.__jaims_tools_to_openai(tools)
+        openai_kw_args = self.kwargs.copy_with_overrides(
+            messages=openai_messages,
+            tools=openai_tools,
+            stream=False,
+        )
+        response = self.___get_openai_response(openai_kw_args, self.options)
+        assert isinstance(response, ChatCompletion)
+        return self.__openai_chat_completion_to_jaims_message(response)
+
+    def call_steraming(
+        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+    ) -> Generator[JAImsStreamingMessage, None, None]:
+        openai_messages = self.__jaims_messages_to_openai(messages)
+        openai_tools = self.__jaims_tools_to_openai(tools)
+        openai_kw_args = self.kwargs.copy_with_overrides(
+            messages=openai_messages,
+            tools=openai_tools,
+            stream=True,
+        )
+        response = self.___get_openai_response(openai_kw_args, self.options)
+        assert isinstance(response, Stream)
+
+        accumulated_delta = None
+        for completion_chunk in response:
+            accumulated_delta = self.__accumulate_choice_delta(
+                accumulated_delta, completion_chunk.choices[0].delta
+            )
+            yield self.__openai_chat_completion_choice_delta_to_jaims_message(
+                accumulated_delta, completion_chunk
+            )
 
     def __jaims_messages_to_openai(self, messages: List[JAImsMessage]) -> List[dict]:
 
@@ -412,21 +434,70 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             raw=message,
         )
 
-    def call(
-        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
-    ) -> JAImsMessage:
-        openai_messages = self.__jaims_messages_to_openai(messages)
-        openai_tools = self.__jaims_tools_to_openai(tools)
-        openai_kw_args = self.kwargs.copy_with_overrides(
-            messages=openai_messages,
-            tools=openai_tools,
-            stream=False,
+    def __openai_chat_completion_choice_delta_to_jaims_message(
+        self, accumulated_choice_delta: ChoiceDelta, current_chunk: ChatCompletionChunk
+    ) -> JAImsStreamingMessage:
+
+        current_choice = current_chunk.choices[0]
+        role = JAImsMessageRole(current_choice.delta.role)
+        textDelta = current_choice.delta.content
+        text = None
+        contents = None
+        function_tool_calls = None
+
+        role = JAImsMessageRole(accumulated_choice_delta.role)
+        if accumulated_choice_delta.content:
+            text = accumulated_choice_delta.content
+            contents = [
+                JAImsMessageContent(
+                    type=JAImsContentTypes.TEXT,
+                    content=accumulated_choice_delta.content,
+                )
+            ]
+
+        if current_choice.finish_reason and accumulated_choice_delta.tool_calls:
+            function_tool_calls = []
+            for tc in accumulated_choice_delta.tool_calls:
+                if tc.function:
+                    function_tool_calls.append(
+                        JAImsToolCall(
+                            id=tc.id or "",
+                            tool_name=tc.function.name or "",
+                            tool_args=(
+                                json.loads(tc.function.arguments)
+                                if tc.function.arguments
+                                else None
+                            ),
+                        )
+                    )
+
+        return JAImsStreamingMessage(
+            message=JAImsMessage(
+                role=role,
+                contents=contents,
+                tool_calls=function_tool_calls,
+                text=text,
+                raw=accumulated_choice_delta,
+            ),
+            textDelta=textDelta,
         )
-        response = self.get_openai_response(openai_kw_args, self.options)
 
-        return JAImsMessage.text_message(response.choices[0].message["content"])
+    def __handle_openai_error(self, error: openai.OpenAIError) -> ErrorHandlingMethod:
+        # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
+        # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
+        error_handling_map = {
+            openai.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
+            openai.InternalServerError: ErrorHandlingMethod.RETRY,
+            openai.APITimeoutError: ErrorHandlingMethod.RETRY,
+        }
 
-    def get_openai_response(
+        for error_type, error_handling_method in error_handling_map.items():
+            if isinstance(error, error_type):
+                return error_handling_method
+
+        return ErrorHandlingMethod.FAIL
+
+    def ___get_openai_response(
         self,
         openai_kw_args: JAImsOpenaiKWArgs,
         call_options: JAImsOptions,
@@ -438,11 +509,9 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         # keeps track of the exponential backoff
         backoff_time = call_options.exponential_delay
 
-        # print(json.dumps(openai_kw_args.messages, indent=4))
-
         while retries < call_options.max_retries:
             try:
-                client = OpenAI()
+                client = OpenAI(api_key=self.api_key)
                 kwargs = openai_kw_args.to_dict()
                 response = client.chat.completions.create(
                     **kwargs,
@@ -451,7 +520,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 return response
             except openai.OpenAIError as error:
                 logger.error(f"OpenAI API error:\n{error}\n")
-                error_handling_method = __handle_openai_error(error)
+                error_handling_method = self.__handle_openai_error(error)
 
                 if error_handling_method == ErrorHandlingMethod.FAIL:
                     raise Exception(f"OpenAI API error: {error}")
@@ -479,3 +548,74 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         max_retries_error = f"Max retries exceeded! OpenAI API call failed {call_options.max_retries} times."
         logger.error(max_retries_error)
         raise Exception(max_retries_error)
+
+    def __merge_tool_calls(
+        self,
+        existing_tool_calls: Optional[List[ChoiceDeltaToolCall]],
+        new_tool_calls_delta: List[ChoiceDeltaToolCall],
+    ):
+        if not existing_tool_calls:
+            return new_tool_calls_delta
+
+        new_tool_calls = existing_tool_calls[:]
+        for new_call_delta in new_tool_calls_delta:
+            # check the tall call is already being streamed
+            existing_call = next(
+                (item for item in new_tool_calls if item.index == new_call_delta.index),
+                None,
+            )
+            # new tool call, add it to the list
+            if not existing_call:
+                new_tool_calls.append(new_call_delta)
+
+            # existing tool call, update it
+            else:
+                # update tool type
+                if (
+                    existing_call.type != new_call_delta.type
+                    and new_call_delta.type is not None
+                ):
+                    existing_call.type = new_call_delta.type
+
+                # update tool id
+                if (
+                    existing_call.id != new_call_delta.id
+                    and new_call_delta.id is not None
+                ):
+                    existing_call.id = new_call_delta.id
+
+                # update function
+                if new_call_delta.function:
+                    if existing_call.function is None:
+                        existing_call.function = new_call_delta.function
+                    else:
+                        # update function name
+                        if (
+                            existing_call.function.name != new_call_delta.function.name
+                            and new_call_delta.function.name is not None
+                        ):
+                            existing_call.function.name = new_call_delta.function.name
+
+                        # update function args
+                        existing_call.function.arguments = (
+                            existing_call.function.arguments or ""
+                        ) + (new_call_delta.function.arguments or "")
+
+        return new_tool_calls
+
+    def __accumulate_choice_delta(
+        self, accumulator: Optional[ChoiceDelta], new_delta: ChoiceDelta
+    ) -> ChoiceDelta:
+        if accumulator is None:
+            return new_delta
+
+        if new_delta.content:
+            accumulator.content = (accumulator.content or "") + new_delta.content
+        if new_delta.role:
+            accumulator.role = new_delta.role
+        if new_delta.tool_calls:
+            accumulator.tool_calls = self.__merge_tool_calls(
+                accumulator.tool_calls, new_delta.tool_calls
+            )
+
+        return accumulator
