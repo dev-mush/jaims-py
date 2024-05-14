@@ -2,7 +2,6 @@ from typing import Generator, List, Optional
 
 
 from jaims.interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
-from jaims.default_history_manager import JAImsDefaultHistoryManager
 from jaims.default_tool_manager import JAImsDefaultToolManager
 
 
@@ -14,6 +13,9 @@ from jaims.entities import (
 
 # TODO: Refactor all docstrings
 # TODO: Refactor logging entirely
+# TODO: Adjust imports in __init__.py files making them more explicit
+# TODO: Adjust transaction storage for openai streaming response
+# TODO: Add original response to jaims message and return it instead of strings
 # TODO: Decide return type of runs, might not be ideal to return a string
 # TODO: Implement a method to pass a function directly instead of the jaims descriptors
 
@@ -53,6 +55,8 @@ class JAImsAgent:
         self.__tool_manager = tool_manager or JAImsDefaultToolManager()
         self.__tools = tools or []
         self.__history_manager = history_manager
+        self.__session_iteration = -1
+        self.__session_messages = []
 
     def __get_messages_for_run(
         self, messages: Optional[List[JAImsMessage]]
@@ -74,10 +78,40 @@ class JAImsAgent:
 
         return session_messages
 
+    def __update_session(
+        self, session_messages: List[JAImsMessage], max_iterations: int
+    ):
+        self.__session_iteration += 1
+        if self.__session_iteration > max_iterations:
+            raise JAImsMaxConsecutiveFunctionCallsExceeded(self.__session_iteration)
+
+        if self.__history_manager:
+            self.__history_manager.add_messages(session_messages)
+            self.__session_messages = self.__history_manager.get_messages()
+        else:
+            self.__session_messages.extend(session_messages)
+
+    def __end_session(self, response: Optional[JAImsMessage] = None):
+
+        if self.__history_manager and response:
+            self.__history_manager.add_messages([response])
+
+        self.__session_iteration = -1
+        self.__session_messages = []
+
+    def __evaluate_tool_results(self, message: Optional[JAImsMessage]):
+        tool_results = []
+        if message and message.tool_calls:
+            tool_call_results = self.__tool_manager.handle_tool_calls(
+                message.tool_calls, self.__tools
+            )
+            tool_results = [message] + tool_call_results
+
+        return tool_results
+
     def run(
         self,
         messages: Optional[List[JAImsMessage]] = None,
-        iteration_n: int = 0,
         max_iterations: int = 10,
     ) -> Optional[str]:
         """
@@ -85,32 +119,28 @@ class JAImsAgent:
 
         Args:
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            iteration_n (int): The current iteration number. Defaults to 0.
             max_iterations (int): The maximum number of iterations. Defaults to 10. Pass this to constrain the maximum number of function calls.
 
         Returns:
             Optional[str]: The response text, or None if there is no response.
         """
-        if iteration_n >= max_iterations:
-            raise JAImsMaxConsecutiveFunctionCallsExceeded(iteration_n)
 
-        session_messages = self.__get_messages_for_run(messages)
+        self.__update_session(messages or [], max_iterations)
 
-        response = self.__llm_interface.call(session_messages, self.__tools)
+        response_message = self.__llm_interface.call(
+            self.__session_messages, self.__tools
+        )
 
-        if response.tool_calls:
-            tool_response_messages = self.__tool_manager.handle_tool_calls(
-                response.tool_calls, self.__tools
-            )
-            if tool_response_messages:
-                return self.run(tool_response_messages, iteration_n + 1, max_iterations)
+        tool_results = self.__evaluate_tool_results(response_message)
+        if tool_results:
+            return self.run(tool_results, max_iterations)
 
-        return response.text or ""
+        self.__end_session(response_message)
+        return response_message.text or ""
 
     def run_stream(
         self,
         messages: Optional[List[JAImsMessage]] = None,
-        iteration_n: int = 0,
         max_iterations: int = 10,
     ) -> Generator[str, None, None]:
         """
@@ -118,29 +148,25 @@ class JAImsAgent:
 
         Args:
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            iteration_n (int): The current iteration number. Defaults to 0.
             max_iterations (int): The maximum number of iterations. Defaults to 10. Pass this to constrain the maximum number of function calls.
 
         Yields:
             str: The text delta of each response message.
         """
-        if iteration_n >= max_iterations:
-            raise JAImsMaxConsecutiveFunctionCallsExceeded(iteration_n)
 
-        session_messages = self.__get_messages_for_run(messages)
+        self.__update_session(messages or [], max_iterations)
 
-        response = self.__llm_interface.call_streaming(session_messages, self.__tools)
+        streaming_response = self.__llm_interface.call_streaming(
+            self.__session_messages, self.__tools
+        )
 
         response_message = None
-        for delta_resp in response:
+        for delta_resp in streaming_response:
             response_message = delta_resp.message
             yield delta_resp.textDelta or ""
 
-        if response_message and response_message.tool_calls:
-            tool_response_messages = self.__tool_manager.handle_tool_calls(
-                response_message.tool_calls, self.__tools
-            )
-            if tool_response_messages:
-                yield from self.run_stream(
-                    tool_response_messages, iteration_n + 1, max_iterations
-                )
+        tool_results = self.__evaluate_tool_results(response_message)
+        if tool_results:
+            yield from self.run_stream(tool_results, max_iterations)
+
+        self.__end_session(response_message)

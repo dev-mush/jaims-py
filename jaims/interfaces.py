@@ -16,6 +16,7 @@ class JAImsLLMInterface(ABC):
     ) -> JAImsMessage:
         raise NotImplementedError
 
+    @abstractmethod
     def call_streaming(
         self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
     ) -> Generator[JAImsStreamingMessage, None, None]:

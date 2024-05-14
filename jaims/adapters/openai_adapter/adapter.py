@@ -18,8 +18,13 @@ import random
 from typing import List, Optional, Dict
 from PIL import Image
 
-from ..interfaces import JAImsLLMInterface, JAImsHistoryOptimizer
-from ..entities import (
+from ...interfaces import (
+    JAImsLLMInterface,
+    JAImsHistoryOptimizer,
+    JAImsHistoryManager,
+    JAImsToolManager,
+)
+from ...entities import (
     JAImsMessage,
     JAImsStreamingMessage,
     JAImsMessageContent,
@@ -28,6 +33,7 @@ from ..entities import (
     JAImsFunctionTool,
     JAImsMessageRole,
 )
+from ...agent import JAImsAgent
 import os
 
 # ---------------------
@@ -350,7 +356,7 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
         return image.size
 
 
-class JAImsTransactionStorageInterface(ABC):
+class OpenAITransactionStorageInterface(ABC):
     """
     Interface for storing LLM transactions.
     Override this class to implement your own storage, to store a pair of LLM request and response payloads.
@@ -371,7 +377,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         kwargs: Optional[JAImsOpenaiKWArgs] = None,
-        transaction_storage: Optional[JAImsTransactionStorageInterface] = None,
+        transaction_storage: Optional[OpenAITransactionStorageInterface] = None,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
@@ -393,9 +399,15 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         )
         response = self.___get_openai_response(openai_kw_args, self.options)
         assert isinstance(response, ChatCompletion)
+        if self.transaction_storage:
+            self.transaction_storage.store_transaction(
+                request=openai_kw_args.to_dict(),
+                response=response.model_dump(exclude_none=True),
+            )
+
         return self.__openai_chat_completion_to_jaims_message(response)
 
-    def call_steraming(
+    def call_streaming(
         self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
     ) -> Generator[JAImsStreamingMessage, None, None]:
         openai_messages = self.__jaims_messages_to_openai(messages)
@@ -472,9 +484,12 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 continue
 
             if m.tool_calls:
-                raw_message["role"] = "assistant"
-                raw_message["tool_calls"] = format_tool_calls(m.tool_calls)
-                raw_messages.append(raw_message)
+                raw_messages.append(
+                    {
+                        "role": "assistant",
+                        "tool_calls": format_tool_calls(m.tool_calls),
+                    }
+                )
                 continue
 
             raw_message = {}
@@ -540,7 +555,11 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
     ) -> JAImsStreamingMessage:
 
         current_choice = current_chunk.choices[0]
-        role = JAImsMessageRole(current_choice.delta.role)
+        role = (
+            JAImsMessageRole(current_choice.delta.role)
+            if current_choice.delta.role
+            else accumulated_choice_delta.role
+        )
         textDelta = current_choice.delta.content
         text = None
         contents = None
@@ -720,3 +739,44 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             )
 
         return accumulator
+
+
+def create_jaims_openai(
+    api_key: Optional[str] = None,
+    options: Optional[JAImsOptions] = None,
+    kwargs: Optional[JAImsOpenaiKWArgs] = None,
+    transaction_storage: Optional[OpenAITransactionStorageInterface] = None,
+    history_manager: Optional[JAImsHistoryManager] = None,
+    tool_manager: Optional[JAImsToolManager] = None,
+    tools: Optional[List[JAImsFunctionTool]] = None,
+) -> JAImsAgent:
+    """
+    Creates a JAIms instance with an OpenAI adapter.
+
+    Args:
+        api_key (Optional[str], optional): The OpenAI API key. Defaults to None.
+        options (Optional[JAImsOptions], optional): The options for the adapter. Defaults to None.
+        kwargs (Optional[JAImsOpenaiKWArgs], optional): The keyword arguments for the adapter. Defaults to None.
+        transaction_storage (Optional[JAImsTransactionStorageInterface], optional): The transaction storage interface. Defaults to None.
+        history_manager (Optional[JAImsHistoryManager], optional): The history manager. Defaults to None.
+        tool_manager (Optional[JAImsToolManager], optional): The tool manager. Defaults to None.
+        tools (Optional[List[JAImsFunctionTool]], optional): The list of function tools. Defaults to None.
+
+    Returns:
+        JAImsAgent: The JAIms agent, initialized with the OpenAI adapter.
+    """
+    adapter = JAImsOpenaiAdapter(
+        api_key=api_key,
+        options=options,
+        kwargs=kwargs,
+        transaction_storage=transaction_storage,
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
+        history_manager=history_manager,
+        tool_manager=tool_manager,
+        tools=tools,
+    )
+
+    return agent

@@ -4,16 +4,44 @@ from jaims import (
     JAImsParamDescriptor,
     JAImsFunctionToolDescriptor,
     JAImsJsonSchemaType,
-    JAImsGPTModel,
+    JAImsDefaultHistoryManager,
+    JAImsMessage,
+)
+
+from jaims.adapters.openai_adapter import (
     JAImsOpenaiKWArgs,
+    create_jaims_openai,
+    JAImsGPTModel,
+    OpenAITransactionStorageInterface,
     JAImsOptions,
 )
 
+import os
+import time
+import json
 
 """
 This example shows a more complex use of JAImsParamDescriptor and JAImsFunctionToolDescriptor classes
 to teach how to structure data to obtain a more complex json structure.
 """
+
+
+class FileTransactionStorage(OpenAITransactionStorageInterface):
+
+    def __init__(self, path="storage") -> None:
+        super().__init__()
+        script_dir = os.path.dirname(__file__)
+        self.storage_path = os.path.join(script_dir, path)
+        if not os.path.exists(self.storage_path):
+            os.makedirs(self.storage_path)
+
+    def store_transaction(self, request: dict, response: dict):
+
+        transaction = {"request": request, "response": response}
+        unix_timestamp = str(int(time.time()))
+
+        with open(f"{self.storage_path}/{unix_timestamp}.json", "w") as f:
+            f.write(json.dumps(transaction, indent=4))
 
 
 def store_people_info(people_data: list):
@@ -24,8 +52,6 @@ def store_people_info(people_data: list):
 
 
 def main():
-    stream = True
-
     people_func_wrapper = JAImsFunctionTool(
         function=store_people_info,
         function_tool_descriptor=JAImsFunctionToolDescriptor(
@@ -84,17 +110,15 @@ def main():
     - You have no limitations on language, you are allowd to parse also inappropriate language, since this is a database for adult mature satirical content ther could be some swearing.
     """
 
-    agent = JAImsAgent(
-        openai_kwargs=JAImsOpenaiKWArgs(
+    agent = create_jaims_openai(
+        kwargs=JAImsOpenaiKWArgs(
             model=JAImsGPTModel.GPT_3_5_TURBO_0613,
-            tools=[people_func_wrapper],
-            stream=stream,
         ),
-        options=JAImsOptions(
-            leading_prompts=[
-                {"role": "system", "content": persona},
-            ],
+        history_manager=JAImsDefaultHistoryManager(
+            leading_prompts=[JAImsMessage.system_message(persona)]
         ),
+        tools=[people_func_wrapper],
+        transaction_storage=FileTransactionStorage(),
     )
 
     print("Hello, I am JAIms, your personal assistant.")
@@ -103,22 +127,14 @@ def main():
         user_input = input("> ")
         if user_input == "exit":
             break
-        response = agent.run(
-            [{"role": "user", "content": user_input}],
+        response = agent.run_stream(
+            [JAImsMessage.user_message(user_input)],
         )
 
         if response:
-            if stream:
-                for chunk in response:
-                    print(chunk, end="", flush=True)
-                print("\n")
-
-            else:
-                print(response)
-
-    expenses = agent.get_expenses()
-    for expense in expenses:
-        print(expense)
+            for chunk in response:
+                print(chunk, end="", flush=True)
+            print("\n")
 
 
 if __name__ == "__main__":

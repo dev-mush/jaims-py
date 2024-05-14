@@ -109,7 +109,7 @@ class TestJAImsAgent(unittest.TestCase):
         self.assertEqual(response, "World")
 
         self.tool_manager.handle_tool_calls.assert_called_once_with(
-            [self.mock_message_response_tool_calls], self.mock_tools
+            self.mock_message_response_tool_calls.tool_calls, self.mock_tools
         )
 
 
