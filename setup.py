@@ -1,8 +1,16 @@
 from setuptools import setup, find_packages
 
-# Read requirements.txt
+# Read the main requirements
 with open("requirements.txt") as f:
     requirements = f.read().splitlines()
+
+# Read OpenAI specific requirements
+with open("requirements-openai.txt") as f:
+    requirements_openai = f.read().splitlines()
+
+# Read Google Cloud AI specific requirements
+with open("requirements-google-cloud-ai.txt") as f:
+    requirements_google_cloud_ai = f.read().splitlines()
 
 setup(
     name="jaims-py",
@@ -16,4 +24,8 @@ setup(
     license="MIT",
     keywords="OpenAI GPT-3 and GPT-4 function enabled agent",
     install_requires=requirements,
+    extras_require={
+        "openai": requirements_openai,
+        "googlecloud": requirements_google_cloud_ai,
+    },
 )
