@@ -1,4 +1,9 @@
 from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .agent import JAImsAgent
+
 from typing import List
 from jaims.entities import (
     JAImsFunctionTool,
@@ -14,6 +19,7 @@ class JAImsDefaultToolManager(JAImsToolManager):
 
     def handle_tool_calls(
         self,
+        agent: JAImsAgent,
         tool_calls: List[JAImsToolCall],
         tools: List[JAImsFunctionTool],
     ) -> List[JAImsMessage]:

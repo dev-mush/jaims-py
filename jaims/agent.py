@@ -1,7 +1,12 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
+
 from typing import Generator, List, Optional
 
 
-from jaims.interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
 from jaims.default_tool_manager import JAImsDefaultToolManager
 
 
@@ -51,10 +56,10 @@ class JAImsAgent:
         tool_manager: Optional[JAImsToolManager] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
     ):
-        self.__llm_interface = llm_interface
-        self.__tool_manager = tool_manager or JAImsDefaultToolManager()
-        self.__tools = tools or []
-        self.__history_manager = history_manager
+        self.llm_interface = llm_interface
+        self.tool_manager = tool_manager or JAImsDefaultToolManager()
+        self.tools = tools or []
+        self.history_manager = history_manager
         self.__session_iteration = -1
         self.__session_messages = []
 
@@ -72,9 +77,9 @@ class JAImsAgent:
         """
         session_messages = messages or []
 
-        if self.__history_manager:
-            self.__history_manager.add_messages(session_messages)
-            session_messages = self.__history_manager.get_messages()
+        if self.history_manager:
+            self.history_manager.add_messages(session_messages)
+            session_messages = self.history_manager.get_messages()
 
         return session_messages
 
@@ -85,16 +90,16 @@ class JAImsAgent:
         if self.__session_iteration > max_iterations:
             raise JAImsMaxConsecutiveFunctionCallsExceeded(self.__session_iteration)
 
-        if self.__history_manager:
-            self.__history_manager.add_messages(session_messages)
-            self.__session_messages = self.__history_manager.get_messages()
+        if self.history_manager:
+            self.history_manager.add_messages(session_messages)
+            self.__session_messages = self.history_manager.get_messages()
         else:
             self.__session_messages.extend(session_messages)
 
     def __end_session(self, response: Optional[JAImsMessage] = None):
 
-        if self.__history_manager and response:
-            self.__history_manager.add_messages([response])
+        if self.history_manager and response:
+            self.history_manager.add_messages([response])
 
         self.__session_iteration = -1
         self.__session_messages = []
@@ -102,8 +107,8 @@ class JAImsAgent:
     def __evaluate_tool_results(self, message: Optional[JAImsMessage]):
         tool_results = []
         if message and message.tool_calls:
-            tool_call_results = self.__tool_manager.handle_tool_calls(
-                message.tool_calls, self.__tools
+            tool_call_results = self.tool_manager.handle_tool_calls(
+                self, message.tool_calls, self.tools
             )
             tool_results = [message] + tool_call_results
 
@@ -127,9 +132,7 @@ class JAImsAgent:
 
         self.__update_session(messages or [], max_iterations)
 
-        response_message = self.__llm_interface.call(
-            self.__session_messages, self.__tools
-        )
+        response_message = self.llm_interface.call(self.__session_messages, self.tools)
 
         tool_results = self.__evaluate_tool_results(response_message)
         if tool_results:
@@ -156,8 +159,8 @@ class JAImsAgent:
 
         self.__update_session(messages or [], max_iterations)
 
-        streaming_response = self.__llm_interface.call_streaming(
-            self.__session_messages, self.__tools
+        streaming_response = self.llm_interface.call_streaming(
+            self.__session_messages, self.tools
         )
 
         response_message = None
@@ -168,5 +171,6 @@ class JAImsAgent:
         tool_results = self.__evaluate_tool_results(response_message)
         if tool_results:
             yield from self.run_stream(tool_results, max_iterations)
+            return
 
         self.__end_session(response_message)

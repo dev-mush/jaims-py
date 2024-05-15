@@ -5,4 +5,5 @@ from .adapter import (
     JAImsGPTModel,
     JAImsTokenHistoryOptimizer,
     OpenAITransactionStorageInterface,
+    JAImsOpenaiAdapter,
 )

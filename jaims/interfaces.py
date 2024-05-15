@@ -1,5 +1,12 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .agent import JAImsAgent
+
 from abc import ABC, abstractmethod
 from typing import List, Generator
+
 
 from jaims.entities import (
     JAImsMessage,
@@ -42,6 +49,9 @@ class JAImsHistoryManager(ABC):
 class JAImsToolManager(ABC):
     @abstractmethod
     def handle_tool_calls(
-        self, tool_calls: List[JAImsToolCall], tools: List[JAImsFunctionTool]
+        self,
+        agent: JAImsAgent,
+        tool_calls: List[JAImsToolCall],
+        tools: List[JAImsFunctionTool],
     ) -> List[JAImsMessage]:
         raise NotImplementedError
