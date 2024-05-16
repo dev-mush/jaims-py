@@ -23,6 +23,7 @@ from jaims.entities import (
 # TODO: Add original response to jaims message and return it instead of strings
 # TODO: Decide return type of runs, might not be ideal to return a string
 # TODO: Implement a method to pass a function directly instead of the jaims descriptors
+# TODO: Add images support
 
 # TODO: Test Stuff:
 # - Agent:
@@ -139,7 +140,7 @@ class JAImsAgent:
             return self.run(tool_results, max_iterations)
 
         self.__end_session(response_message)
-        return response_message.text or ""
+        return response_message.get_text() or ""
 
     def run_stream(
         self,

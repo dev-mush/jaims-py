@@ -47,19 +47,24 @@ class JAImsMessage:
         self,
         role: JAImsMessageRole,
         contents: Optional[List[JAImsMessageContent]] = None,
-        text: Optional[str] = None,
         name: Optional[str] = None,
         tool_calls: Optional[List[JAImsToolCall]] = None,
-        tool_responses: Optional[List[JAImsToolResponse]] = None,
+        tool_response: Optional[JAImsToolResponse] = None,
         raw: Optional[Any] = None,
     ):
         self.role = role
         self.contents = contents
-        self.text = text
         self.name = name
         self.tool_calls = tool_calls
-        self.tool_responses = tool_responses
+        self.tool_response = tool_response
         self.raw = raw
+
+    def get_text(self) -> str:
+        if self.contents is None:
+            return ""
+        return "".join(
+            c.content for c in self.contents if c.type == JAImsContentTypes.TEXT
+        )
 
     # -------------------------
     # convenience constructors
@@ -70,39 +75,42 @@ class JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.USER,
             contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
-            text=text,
         )
 
     @staticmethod
-    def assistant_message(text: str) -> JAImsMessage:
+    def assistant_message(text: str, raw: Optional[Any]) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.ASSISTANT,
             contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
-            text=text,
+            raw=raw,
         )
 
     @staticmethod
-    def system_message(text: str) -> JAImsMessage:
+    def system_message(text: str, raw: Optional[Any]) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.SYSTEM,
             contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
-            text=text,
+            raw=raw,
         )
 
     @staticmethod
     def tool_response_message(
-        tool_call_id: str, tool_name: str, response: Any
+        tool_call_id: str, tool_name: str, response: Any, raw: Optional[Any] = None
     ) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.TOOL,
-            tool_responses=[JAImsToolResponse(tool_call_id, tool_name, response)],
+            tool_response=JAImsToolResponse(tool_call_id, tool_name, response),
+            raw=raw,
         )
 
     @staticmethod
-    def tool_call_message(tool_calls: List[JAImsToolCall]) -> JAImsMessage:
+    def tool_call_message(
+        tool_calls: List[JAImsToolCall], raw: Optional[Any] = None
+    ) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.ASSISTANT,
             tool_calls=tool_calls,
+            raw=raw,
         )
 
 

@@ -161,3 +161,4 @@ cython_debug/
 .vscode
 .*venv*
 /examples/storage
+/.idea
