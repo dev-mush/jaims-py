@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from jaims.entities import JAImsTokensLimitExceeded, JAImsMessage
+from jaims.entities import JAImsMessage
 from jaims.interfaces import JAImsHistoryManager, JAImsHistoryOptimizer
 
 

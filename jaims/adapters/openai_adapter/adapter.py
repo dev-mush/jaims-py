@@ -1,5 +1,4 @@
 from __future__ import annotations
-import base64
 from abc import ABC, abstractmethod
 from io import BytesIO
 import json
@@ -25,15 +24,17 @@ from ...interfaces import (
     JAImsToolManager,
 )
 from ...entities import (
+    JAImsImageContent,
+    JAImsContentType,
     JAImsMessage,
     JAImsStreamingMessage,
-    JAImsMessageContent,
-    JAImsContentTypes,
     JAImsToolCall,
     JAImsFunctionTool,
     JAImsMessageRole,
 )
 from ...agent import JAImsAgent
+from ..shared.image_utilities import image_to_b64
+
 import os
 
 # ---------------------
@@ -324,15 +325,12 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
         for message in messages:
             if message.contents:
                 for item in message.contents:
-                    if (
-                        item.type == JAImsContentTypes.IMAGE
-                        and item.content.startswith("data:image/jpeg;base64,")
-                    ):
-                        images.append(
-                            item.content.copy().replace("data:image/jpeg;base64,", "")
-                        )
+                    if isinstance(item, str):
+                        parsed.append(item)
+                    elif isinstance(item, Image.Image):
+                        images.append(item)
                     else:
-                        parsed.append(item.content)
+                        raise Exception(f"Unsupported content type: {type(item)}")
 
             if message.tool_calls:
                 for tool_call in message.tool_calls:
@@ -343,16 +341,10 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
 
         image_tokens = 0
         for image in images:
-            width, height = self.__get_image_size_from_base64(image)
+            width, height = image.size
             image_tokens += self.__estimate_image_tokens_count(width, height)
 
         return self.__estimate_token_count(json.dumps(parsed), model) + image_tokens
-
-    def __get_image_size_from_base64(self, base64_string):
-        image_data = base64.b64decode(base64_string)
-        image = Image.open(BytesIO(image_data))
-
-        return image.size
 
 
 class OpenAITransactionStorageInterface(ABC):
@@ -436,21 +428,29 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def __jaims_messages_to_openai(self, messages: List[JAImsMessage]) -> List[dict]:
 
-        def format_contents(contents: List[JAImsMessageContent]):
-            if len(contents) == 1 and contents[0].type == JAImsContentTypes.TEXT:
-                return contents[0].content
+        def format_contents(contents: List[JAImsContentType]):
+            if len(contents) == 1 and isinstance(contents[0], str):
+                return contents[0]
             else:
                 raw_contents = []
                 for c in contents:
+                    if isinstance(c, str):
+                        raw_contents.append({"type": "text", "text": c})
+                    elif isinstance(c, JAImsImageContent):
+                        url = c.image
+                        if isinstance(c.image, Image.Image):
+                            mime, b64 = image_to_b64(c.image)
+                            url = f"data:{mime};base64,{b64}"
 
-                    if c.type == JAImsContentTypes.IMAGE:
                         raw_contents.append(
-                            {"type": "image_url", "image_url": c.content}
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": url},
+                            }
                         )
-                    elif c.type == JAImsContentTypes.TEXT:
-                        raw_contents.append({"type": "text", "content": c.content})
+
                     else:
-                        raise Exception(f"Unsupported content type: {c.type}")
+                        raise Exception(f"Unsupported content type: {type(c)}")
 
                 return raw_contents
 
@@ -534,15 +534,9 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 for tc in message.tool_calls
             ]
 
-        content = None
-        text = None
-        if message.content:
-            text = message.content
-            content = [JAImsMessageContent(type=JAImsContentTypes.TEXT, content=text)]
-
         return JAImsMessage(
             role=role,
-            contents=content,
+            contents=[message.content] if message.content else None,
             tool_calls=tool_calls,
             raw=message,
         )
@@ -558,18 +552,13 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             else accumulated_choice_delta.role
         )
         textDelta = current_choice.delta.content
-        text = None
-        contents = None
+        contents: Optional[List[JAImsContentType]] = None
         function_tool_calls = None
 
         role = JAImsMessageRole(accumulated_choice_delta.role)
         if accumulated_choice_delta.content:
-            text = accumulated_choice_delta.content
             contents = [
-                JAImsMessageContent(
-                    type=JAImsContentTypes.TEXT,
-                    content=accumulated_choice_delta.content,
-                )
+                accumulated_choice_delta.content,
             ]
 
         if current_choice.finish_reason and accumulated_choice_delta.tool_calls:

@@ -3,6 +3,7 @@ from __future__ import annotations
 # Enum class over all Json Types
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
+from PIL import Image
 
 
 # -------------------------
@@ -24,15 +25,15 @@ class JAImsToolResponse:
         self.response = response
 
 
-class JAImsContentTypes(Enum):
-    TEXT = "text"
-    IMAGE = "image"
+JAImsImageContentType = Union[str, Image.Image]
 
 
-class JAImsMessageContent:
-    def __init__(self, content: Any, type: JAImsContentTypes) -> None:
-        self.type = type
-        self.content = content
+class JAImsImageContent:
+    def __init__(self, image: JAImsImageContentType):
+        self.image = image
+
+
+JAImsContentType = Union[JAImsImageContent, str]
 
 
 class JAImsMessageRole(Enum):
@@ -46,7 +47,7 @@ class JAImsMessage:
     def __init__(
         self,
         role: JAImsMessageRole,
-        contents: Optional[List[JAImsMessageContent]] = None,
+        contents: Optional[List[JAImsContentType]] = None,
         name: Optional[str] = None,
         tool_calls: Optional[List[JAImsToolCall]] = None,
         tool_response: Optional[JAImsToolResponse] = None,
@@ -63,26 +64,33 @@ class JAImsMessage:
         if self.contents is None:
             return None
 
-        return "".join(
-            c.content for c in self.contents if c.type == JAImsContentTypes.TEXT
-        )
+        all_text = ""
+        for content in self.contents:
+            if isinstance(content, str):
+                all_text += content
+
+        return all_text or None
 
     # -------------------------
     # convenience constructors
     # -------------------------
 
     @staticmethod
-    def user_message(text: str) -> JAImsMessage:
+    def user_message(
+        text: str,
+        raw: Optional[Any] = None,
+    ) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.USER,
-            contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
+            contents=[text],
+            raw=raw,
         )
 
     @staticmethod
     def assistant_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.ASSISTANT,
-            contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
+            contents=[text],
             raw=raw,
         )
 
@@ -90,7 +98,7 @@ class JAImsMessage:
     def system_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.SYSTEM,
-            contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
+            contents=[text],
             raw=raw,
         )
 
@@ -304,46 +312,6 @@ class JAImsFunctionTool:
 # ----------
 # exceptions
 # ----------
-
-
-class JAImsTokensLimitExceeded(Exception):
-    """
-    Exception raised when the token limit is exceeded.
-
-    Attributes:
-        max_tokens -- maximum number of tokens allowed
-        messages_tokens -- number of tokens in the messages
-        llm_buffer -- buffer for the LLM answer
-        has_optimized -- flag indicating if the messages have been optimized
-    """
-
-    def __init__(self, max_tokens, messages_tokens, llm_buffer, has_optimized):
-        message = f"Max tokens: {max_tokens}\n LLM Answer Buffer: {llm_buffer}\n Messages tokens: {messages_tokens}\n Messages Optimized: {has_optimized}  "
-        super().__init__(message)
-
-
-class JAImsMissingOpenaiAPIKeyException(Exception):
-    """
-    Exception raised when the OPENAI_API_KEY is missing.
-    """
-
-    def __init__(self):
-        message = "Missing OPENAI_API_KEY, set environment variable OPENAI_API_KEY or pass it as a parameter to the agent constructor."
-        super().__init__(message)
-
-
-class JAImsOpenAIErrorException(Exception):
-    """
-    Exception raised when there is an error with OpenAI.
-
-    Attributes:
-        message -- explanation of the error
-        openai_error -- the error from OpenAI
-    """
-
-    def __init__(self, message, openai_error):
-        super().__init__(message)
-        self.openai_error = openai_error
 
 
 class JAImsMaxConsecutiveFunctionCallsExceeded(Exception):

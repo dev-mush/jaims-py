@@ -4,8 +4,6 @@ from jaims.agent import JAImsAgent
 from jaims.entities import (
     JAImsMessage,
     JAImsMessageRole,
-    JAImsMessageContent,
-    JAImsContentTypes,
 )
 
 from jaims.interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
@@ -18,18 +16,16 @@ class TestJAImsAgent(unittest.TestCase):
         self.tool_manager = MagicMock(spec=JAImsToolManager)
         self.tools = MagicMock()
         self.mock_message = JAImsMessage(
-            text="Hello",
             role=JAImsMessageRole.USER,
             contents=[
-                JAImsMessageContent(content="Hello", type=JAImsContentTypes.TEXT)
+                "Hello",
             ],
         )
 
         self.mock_message_response = JAImsMessage(
-            text="World",
             role=JAImsMessageRole.ASSISTANT,
             contents=[
-                JAImsMessageContent(content="World", type=JAImsContentTypes.TEXT)
+                "World",
             ],
         )
         self.mock_message_response_tool_calls = JAImsMessage.tool_call_message(

@@ -6,6 +6,10 @@ from .default_history_manager import (
 )
 from .entities import (
     JAImsMessage,
+    JAImsImageContent,
+    JAImsContentType,
+    JAImsMessageRole,
+    JAImsToolResponse,
     JAImsFunctionTool,
     JAImsMaxConsecutiveFunctionCallsExceeded,
     JAImsFunctionToolDescriptor,

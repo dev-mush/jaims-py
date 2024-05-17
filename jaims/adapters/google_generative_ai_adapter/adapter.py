@@ -5,14 +5,15 @@ from ...entities import (
     JAImsFunctionTool,
     JAImsToolCall,
     JAImsMessageRole,
-    JAImsMessageContent,
-    JAImsContentTypes,
+    JAImsContentType,
+    JAImsImageContent,
     JAImsStreamingMessage,
 )
 from ...agent import JAImsAgent
+from ..shared.image_utilities import image_to_bytes
 
-from typing import Iterable, List, Generator, Optional, Union
-from enum import Enum
+from typing import Iterable, List, Generator, Optional
+from PIL import Image
 
 
 from google.generativeai import GenerativeModel
@@ -93,10 +94,20 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
 
             if jaims_message.contents:
                 for content in jaims_message.contents:
-                    if content.type == JAImsContentTypes.TEXT:
-                        parts.append(glm.Part(text=content.content))
-
-                    # TODO: Add image support
+                    if isinstance(content, str):
+                        parts.append(glm.Part(text=content))
+                    if isinstance(content, JAImsImageContent):
+                        if isinstance(content.image, str):
+                            raise ValueError("Image URL not supported")
+                        elif isinstance(content.image, Image.Image):
+                            mime, data = image_to_bytes(content.image)
+                            parts.append(
+                                glm.Part(
+                                    inline_data=glm.Blob(mime_type=mime, data=data)
+                                )
+                            )
+                        else:
+                            raise ValueError("Invalid image content type")
 
             if jaims_message.tool_response:
                 parts.append(
@@ -150,12 +161,7 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
                 )
 
             if txt := part.text:
-                contents.append(
-                    JAImsMessageContent(
-                        type=JAImsContentTypes.TEXT,
-                        content=txt,
-                    )
-                )
+                contents.append(txt)
 
             # TODO: Add image support
 
