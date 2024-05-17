@@ -59,9 +59,10 @@ class JAImsMessage:
         self.tool_response = tool_response
         self.raw = raw
 
-    def get_text(self) -> str:
+    def get_text(self) -> Optional[str]:
         if self.contents is None:
-            return ""
+            return None
+
         return "".join(
             c.content for c in self.contents if c.type == JAImsContentTypes.TEXT
         )
@@ -78,7 +79,7 @@ class JAImsMessage:
         )
 
     @staticmethod
-    def assistant_message(text: str, raw: Optional[Any]) -> JAImsMessage:
+    def assistant_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.ASSISTANT,
             contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],
@@ -86,7 +87,7 @@ class JAImsMessage:
         )
 
     @staticmethod
-    def system_message(text: str, raw: Optional[Any]) -> JAImsMessage:
+    def system_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
         return JAImsMessage(
             role=JAImsMessageRole.SYSTEM,
             contents=[JAImsMessageContent(content=text, type=JAImsContentTypes.TEXT)],

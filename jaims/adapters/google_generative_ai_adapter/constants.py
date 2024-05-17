@@ -1,0 +1,8 @@
+GEMINI_1_PRO = "gemini-1.0-pro"
+GEMINI_1_PRO_LATEST = "gemini-1.0-pro-latest"
+GEMINI_1_PRO_001 = "gemini-1.0-pro-001"
+GEMINI_1_PRO_VISION = "gemini-1.0-pro-vision"
+GEMINI_1_PRO_VISION_LATEST = "gemini-1.0-pro-vision-latest"
+GEMINI_1_5_FLASH_LATEST = "gemini-1.5-flash-latest"
+GEMINI_1_5_PRO = "gemini-1.5-pro"
+GEMINI_1_5_PRO_LATEST = "gemini-1.5-pro-latest"

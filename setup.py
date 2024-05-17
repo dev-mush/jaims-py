@@ -9,8 +9,8 @@ with open("requirements-openai.txt") as f:
     requirements_openai = f.read().splitlines()
 
 # Read Google Cloud AI specific requirements
-with open("requirements-google-cloud-ai.txt") as f:
-    requirements_google_cloud_ai = f.read().splitlines()
+with open("requirements-googleai.txt") as f:
+    requirements_google_ai = f.read().splitlines()
 
 setup(
     name="jaims-py",
@@ -26,6 +26,6 @@ setup(
     install_requires=requirements,
     extras_require={
         "openai": requirements_openai,
-        "googlecloud": requirements_google_cloud_ai,
+        "google": requirements_google_ai,
     },
 )
