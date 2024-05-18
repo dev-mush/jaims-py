@@ -1,10 +1,8 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from io import BytesIO
 import json
 from enum import Enum
 from math import ceil
-import time
 from typing import Generator, Union
 import openai
 from openai import OpenAI
@@ -12,8 +10,6 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai.types.chat.chat_completion_chunk import ChoiceDelta, ChoiceDeltaToolCall
 from openai import Stream
 import tiktoken
-import logging
-import random
 from typing import List, Optional, Dict
 from PIL import Image
 
@@ -34,6 +30,11 @@ from ...entities import (
 )
 from ...agent import JAImsAgent
 from ..shared.image_utilities import image_to_b64
+from ..shared.entities import JAImsOptions
+from ..shared.exponential_backoff_operation import (
+    call_with_exponential_backoff,
+    ErrorHandlingMethod,
+)
 
 import os
 
@@ -196,78 +197,6 @@ class JAImsOpenaiKWArgs:
             tool_choice=tool_choice if tool_choice else self.tool_choice,
             tools=tools if tools else self.tools,
         )
-
-
-class JAImsOptions:
-    """
-    Represents the options for Openai Adapter.
-
-    Args:
-        max_retries (int): The maximum number of retries after a failing openai call.
-        retry_delay (int): The delay between each retry.
-        exponential_base (int): The base for exponential backoff calculation.
-        exponential_delay (int): The initial delay for exponential backoff.
-        exponential_cap (Optional[int]): The maximum delay for exponential backoff.
-        jitter (bool): Whether to add jitter to the delay (to avoid concurrent firing).
-        debug_stream_function_call (bool): Prints the arguments streamed by OpenAI during function call when streaming enabled.
-    """
-
-    def __init__(
-        self,
-        max_retries=15,
-        retry_delay=10,
-        exponential_base: int = 2,
-        exponential_delay: int = 1,
-        exponential_cap: Optional[int] = None,
-        jitter: bool = True,
-        debug_stream_function_call=False,
-    ):
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        self.exponential_base = exponential_base
-        self.exponential_delay = exponential_delay
-        self.exponential_cap = exponential_cap
-        self.jitter = jitter
-        self.debug_stream_function_call = debug_stream_function_call
-
-    def copy_with_overrides(
-        self,
-        max_retries: Optional[int] = None,
-        retry_delay: Optional[int] = None,
-        exponential_base: Optional[int] = None,
-        exponential_delay: Optional[int] = None,
-        exponential_cap: Optional[int] = None,
-        jitter: Optional[bool] = None,
-        debug_stream_function_call: Optional[bool] = None,
-    ) -> JAImsOptions:
-        """
-        Returns a new JAImsOptions instance with the passed kwargs overridden.
-        """
-        return JAImsOptions(
-            max_retries=max_retries if max_retries else self.max_retries,
-            retry_delay=retry_delay if retry_delay else self.retry_delay,
-            exponential_base=(
-                exponential_base if exponential_base else self.exponential_base
-            ),
-            exponential_delay=(
-                exponential_delay if exponential_delay else self.exponential_delay
-            ),
-            exponential_cap=(
-                exponential_cap if exponential_cap else self.exponential_cap
-            ),
-            jitter=jitter if jitter else self.jitter,
-            debug_stream_function_call=(
-                debug_stream_function_call
-                if debug_stream_function_call
-                else self.debug_stream_function_call
-            ),
-        )
-
-
-class ErrorHandlingMethod(Enum):
-    FAIL = "fail"
-    RETRY = "retry"
-    EXPONENTIAL_BACKOFF = "exponential_backoff"
 
 
 class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
@@ -587,72 +516,41 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             textDelta=textDelta,
         )
 
-    def __handle_openai_error(self, error: openai.OpenAIError) -> ErrorHandlingMethod:
-        # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
-        # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
-        error_handling_map = {
-            openai.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
-            openai.InternalServerError: ErrorHandlingMethod.RETRY,
-            openai.APITimeoutError: ErrorHandlingMethod.RETRY,
-        }
-
-        for error_type, error_handling_method in error_handling_map.items():
-            if isinstance(error, error_type):
-                return error_handling_method
-
-        return ErrorHandlingMethod.FAIL
-
     def ___get_openai_response(
         self,
         openai_kw_args: JAImsOpenaiKWArgs,
         call_options: JAImsOptions,
     ) -> Union[ChatCompletion, Stream[ChatCompletionChunk]]:
-        retries = 0
-        logger = logging.getLogger(__name__)
-        # keeps how long to sleep between retries
-        sleep_time = call_options.retry_delay
-        # keeps track of the exponential backoff
-        backoff_time = call_options.exponential_delay
 
-        while retries < call_options.max_retries:
-            try:
-                client = OpenAI(api_key=self.api_key)
-                kwargs = openai_kw_args.to_dict()
-                response = client.chat.completions.create(
-                    **kwargs,
-                )
+        def handle_openai_error(error) -> ErrorHandlingMethod:
+            # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
+            # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
+            error_handling_map = {
+                openai.RateLimitError: ErrorHandlingMethod.EXPONENTIAL_BACKOFF,
+                openai.InternalServerError: ErrorHandlingMethod.RETRY,
+                openai.APITimeoutError: ErrorHandlingMethod.RETRY,
+            }
 
-                return response
-            except openai.OpenAIError as error:
-                logger.error(f"OpenAI API error:\n{error}\n")
-                error_handling_method = self.__handle_openai_error(error)
+            for error_type, error_handling_method in error_handling_map.items():
+                if isinstance(error, error_type):
+                    return error_handling_method
 
-                if error_handling_method == ErrorHandlingMethod.FAIL:
-                    raise Exception(f"OpenAI API error: {error}")
+            return ErrorHandlingMethod.FAIL
 
-                if error_handling_method == ErrorHandlingMethod.RETRY:
-                    sleep_time = call_options.retry_delay
+        def openai_api_call():
+            client = OpenAI(api_key=self.api_key)
+            kwargs = openai_kw_args.to_dict()
+            response = client.chat.completions.create(
+                **kwargs,
+            )
 
-                elif error_handling_method == ErrorHandlingMethod.EXPONENTIAL_BACKOFF:
-                    logger.info(f"Performing exponential backoff")
-                    jitter = 1 + call_options.jitter * random.random()
-                    backoff_time = backoff_time * call_options.exponential_base * jitter
+            return response
 
-                    if (
-                        call_options.exponential_cap is not None
-                        and backoff_time > call_options.exponential_cap
-                    ):
-                        backoff_time = call_options.exponential_cap * jitter
-
-                    sleep_time = backoff_time
-
-                logger.warning(f"Retrying in {sleep_time} seconds")
-                time.sleep(sleep_time)
-                retries += 1
-
-        max_retries_error = f"Max retries exceeded! OpenAI API call failed {call_options.max_retries} times."
-        logger.error(max_retries_error)
-        raise Exception(max_retries_error)
+        return call_with_exponential_backoff(
+            openai_api_call,
+            handle_openai_error,
+            call_options,
+        )
 
     def __merge_tool_calls(
         self,

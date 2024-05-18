@@ -16,23 +16,21 @@ from jaims.entities import (
     JAImsFunctionTool,
 )
 
-# TODO: Refactor all docstrings
-# TODO: Refactor logging entirely
-# TODO: Adjust imports in __init__.py files making them more explicit
-# TODO: Adjust transaction storage for openai streaming response
-# TODO: Add original response to jaims message and return it instead of strings
-# TODO: Decide return type of runs, might not be ideal to return a string
-# TODO: Implement a method to pass a function directly instead of the jaims descriptors
-# TODO: Add images support
 
-# TODO: Test Stuff:
-# - Agent:
-#  - with and without history
-#  - with and without tools
-#  - use mocks for the interfaces
-# - History Managers []
-# - Tool Manager []
-#
+# TODOS:
+# High Priority
+# TODO: Add error handling and rate limit handling to gemini adapter
+# TODO: Remove the LLM model class and use strings to the adapters
+# TODO: Create an adapter root that offers common classes and methods for instantiating agents based on their identifier
+# TODO: Refactor all docstrings and docs, check imports and remove unused imports
+
+# Mid Priority
+# TODO: Implement a method to pass a function directly instead of the jaims descriptors
+# TODO: Implement Tests
+
+# Low Priority
+# TODO: Adjust transaction storage for openai streaming response
+# TODO: Refactor logging entirely
 
 
 class JAImsAgent:

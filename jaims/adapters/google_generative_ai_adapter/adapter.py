@@ -11,6 +11,11 @@ from ...entities import (
 )
 from ...agent import JAImsAgent
 from ..shared.image_utilities import image_to_bytes
+from ..shared.entities import JAImsOptions
+from ..shared.exponential_backoff_operation import (
+    call_with_exponential_backoff,
+    ErrorHandlingMethod,
+)
 
 from typing import Iterable, List, Generator, Optional
 from PIL import Image
@@ -20,22 +25,26 @@ from google.generativeai import GenerativeModel
 from google.generativeai.types import content_types
 from google.generativeai.types import generation_types
 import google.ai.generativelanguage as glm
+from google.api_core.exceptions import GoogleAPIError
 
 
 class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
     def __init__(
         self,
         model: str,
-        api_key: Optional[str],
-        generation_config: Optional[generation_types.GenerationConfigType],
-        tool_config: Optional[content_types.ToolConfigType],
+        tool_config: Optional[content_types.ToolConfigType] = None,
+        generation_config: Optional[generation_types.GenerationConfigType] = None,
+        options: Optional[JAImsOptions] = None,
+        api_key: Optional[str] = None,
     ):
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
             raise Exception("GOOGLE_API_KEY not provided.")
+
         self.model = model
         self.generation_config = generation_config
         self.tool_config = tool_config
+        self.options = options or JAImsOptions()
 
     def call(
         self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
@@ -163,8 +172,6 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
             if txt := part.text:
                 contents.append(txt)
 
-            # TODO: Add image support
-
         return JAImsMessage(
             role=role,
             contents=contents,
@@ -179,25 +186,43 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
         stream: bool = False,
     ):
 
-        # TODO: Add error and rate limit handling
+        def handle_gemini_error(error):
 
-        system_instruction, gemini_messages = self.__jaims_messages_to_gemini(messages)
-        gemini_tools = self.__jaims_tools_to_gemini(tools) if tools else None
+            # From: https://ai.google.dev/gemini-api/docs/troubleshooting
+            # 400	INVALID_ARGUMENT	The request body is malformed.	Check the API reference for request format, examples, and supported versions. Using features from a newer API version with an older endpoint can cause errors.
+            # 403	PERMISSION_DENIED	Your API key doesn't have the required permissions.	Check that your API key is set and has the right access.
+            # 404	NOT_FOUND	The requested resource wasn't found.	Check if all parameters in your request are valid for your API version.
+            # 429	RESOURCE_EXHAUSTED	You've exceeded the rate limit.	Ensure you're within the model's rate limit. Request a quota increase if needed.
+            # 500	INTERNAL	An unexpected error occurred on Google's side.	Wait a bit and retry your request. If the issue persists after retrying, please report it using the Send feedback button in Google AI Studio.
+            # 503	UNAVAILABLE	The service may be temporarily overloaded or down.	Wait a bit and retry your request. If the issue persists after retrying, please report it using the Send feedback button in Google AI Studio.
 
-        multimodal_model = GenerativeModel(
-            self.model,
-            generation_config=self.generation_config,
-            tools=gemini_tools,
-            tool_config=self.tool_config,
-            system_instruction=system_instruction or None,
+            if error.code == 429 or error.code == 503 or error.code == 500:
+                return ErrorHandlingMethod.EXPONENTIAL_BACKOFF
+
+            return ErrorHandlingMethod.FAIL
+
+        def call_gemini():
+            system_instruction, gemini_messages = self.__jaims_messages_to_gemini(
+                messages
+            )
+            gemini_tools = self.__jaims_tools_to_gemini(tools) if tools else None
+
+            multimodal_model = GenerativeModel(
+                self.model,
+                generation_config=self.generation_config,
+                tools=gemini_tools,
+                tool_config=self.tool_config,
+                system_instruction=system_instruction or None,
+            )
+
+            return multimodal_model.generate_content(
+                contents=gemini_messages,
+                stream=stream,
+            )
+
+        return call_with_exponential_backoff(
+            call_gemini, handle_gemini_error, self.options
         )
-
-        response = multimodal_model.generate_content(
-            contents=gemini_messages,
-            stream=stream,
-        )
-
-        return response
 
 
 def create_jaims_gemini(

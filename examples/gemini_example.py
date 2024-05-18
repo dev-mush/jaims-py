@@ -132,7 +132,7 @@ def main():
     )
 
     agent = create_jaims_gemini(
-        model=GEMINI_1_5_FLASH_LATEST,
+        model="gemini-1.5-pro-latest",
         history_manager=history_manager,
         tools=[
             sum_func_wrapper,
