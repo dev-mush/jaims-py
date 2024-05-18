@@ -19,7 +19,6 @@ from jaims.entities import (
 
 # TODOS:
 # High Priority
-# TODO: Add error handling and rate limit handling to gemini adapter
 # TODO: Remove the LLM model class and use strings to the adapters
 # TODO: Create an adapter root that offers common classes and methods for instantiating agents based on their identifier
 # TODO: Refactor all docstrings and docs, check imports and remove unused imports

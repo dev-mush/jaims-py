@@ -1,7 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import json
-from enum import Enum
 from math import ceil
 from typing import Generator, Union
 import openai
@@ -37,35 +36,11 @@ from ..shared.exponential_backoff_operation import (
 )
 
 import os
+from copy import deepcopy
 
 # ---------------------
 # openai / LLM modeling
 # ---------------------
-
-
-class JAImsGPTModel(Enum):
-    """
-    The OPENAI Chat GPT models available.
-    """
-
-    GPT_3_5_TURBO = ("gpt-3.5-turbo", 4096)
-    GPT_3_5_TURBO_16K = ("gpt-3.5-turbo-16k", 16384)
-    GPT_3_5_TURBO_0613 = ("gpt-3.5-turbo-0613", 4096)
-    GPT_3_5_TURBO_16K_0613 = ("gpt-3.5-turbo-16k-0613", 16384)
-    GPT_3_5_TURBO_1106 = ("gpt-3.5-turbo-1106", 16385)
-    GPT_4 = ("gpt-4", 8192)
-    GPT_4_32K = ("gpt-4-32k", 32768)
-    GPT_4_0613 = ("gpt-4-0613", 8192)
-    GPT_4_32K_0613 = ("gpt-4-32k-0613", 32768)
-    GPT_4_1106_PREVIEW = ("gpt-4-1106-preview", 128000)
-    GPT_4_VISION_PREVIEW = ("gpt-4-vision-preview", 128000)
-
-    def __init__(self, string, max_tokens):
-        self.string = string
-        self.max_tokens = max_tokens
-
-    def __str__(self):
-        return self.string
 
 
 class JAImsOpenaiKWArgs:
@@ -75,7 +50,7 @@ class JAImsOpenaiKWArgs:
     (https://platform.openai.com/docs/api-reference/chat/create).
 
     Args:
-        model (JAImsGPTModel, optional): The OpenAI model to use. Defaults to JAImsGPTModel.GPT_3_5_TURBO.
+        model (str, optional): The OpenAI model to use. Defaults to gpt-3.5-turbo.
         messages (List[dict], optional): The list of messages for the chat completion. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them. If passed, they will always be appended to the messages passed in the run method.
         max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 500.
         stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
@@ -94,7 +69,7 @@ class JAImsOpenaiKWArgs:
 
     def __init__(
         self,
-        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
+        model: str = "gpt-3.5-turbo",
         messages: List[dict] = [],
         max_tokens: int = 1024,
         stream: bool = False,
@@ -128,7 +103,7 @@ class JAImsOpenaiKWArgs:
 
     def to_dict(self):
         kwargs = {
-            "model": self.model.string,
+            "model": self.model,
             "temperature": self.temperature,
             "n": self.n,
             "stream": self.stream,
@@ -153,9 +128,29 @@ class JAImsOpenaiKWArgs:
 
         return kwargs
 
+    @staticmethod
+    def from_dict(kwargs: dict) -> JAImsOpenaiKWArgs:
+        return JAImsOpenaiKWArgs(
+            model=kwargs.get("model", "gpt-3.5-turbo"),
+            messages=kwargs.get("messages", []),
+            max_tokens=kwargs.get("max_tokens", 1024),
+            stream=kwargs.get("stream", False),
+            temperature=kwargs.get("temperature", 0.0),
+            top_p=kwargs.get("top_p", None),
+            n=kwargs.get("n", 1),
+            seed=kwargs.get("seed", None),
+            frequency_penalty=kwargs.get("frequency_penalty", 0.0),
+            presence_penalty=kwargs.get("presence_penalty", 0.0),
+            logit_bias=kwargs.get("logit_bias", None),
+            response_format=kwargs.get("response_format", None),
+            stop=kwargs.get("stop", None),
+            tool_choice=kwargs.get("tool_choice", "auto"),
+            tools=kwargs.get("tools", None),
+        )
+
     def copy_with_overrides(
         self,
-        model: Optional[JAImsGPTModel] = None,
+        model: Optional[str] = None,
         messages: Optional[List[dict]] = None,
         max_tokens: Optional[int] = None,
         stream: Optional[bool] = None,
@@ -203,12 +198,10 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
     def __init__(
         self,
         options: JAImsOptions,
-        openai_kwargs: JAImsOpenaiKWArgs,
         history_max_tokens: int,
-        model: JAImsGPTModel,
+        model: str,
     ):
         self.options = options
-        self.openai_kwargs = openai_kwargs
         self.history_max_tokens = history_max_tokens
         self.model = model
 
@@ -232,10 +225,10 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
 
         return buffer
 
-    def __estimate_token_count(self, string: str, model: JAImsGPTModel) -> int:
+    def __estimate_token_count(self, string: str, model: str) -> int:
         """Returns the number of tokens in a text string."""
 
-        encoding = tiktoken.encoding_for_model(model.string)
+        encoding = tiktoken.encoding_for_model(model)
         num_tokens = len(encoding.encode(string))
         return num_tokens
 
@@ -296,7 +289,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         self,
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
-        kwargs: Optional[JAImsOpenaiKWArgs] = None,
+        kwargs: Optional[Union[JAImsOpenaiKWArgs, Dict]] = None,
         transaction_storage: Optional[OpenAITransactionStorageInterface] = None,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -307,21 +300,35 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         self.kwargs = kwargs or JAImsOpenaiKWArgs()
         self.transaction_storage = transaction_storage
 
+    def __get_args(
+        self,
+        messages: List[JAImsMessage],
+        tools: List[JAImsFunctionTool],
+        stream: bool = False,
+    ):
+        openai_messages = self.__jaims_messages_to_openai(messages)
+        openai_tools = self.__jaims_tools_to_openai(tools)
+
+        if isinstance(self.kwargs, JAImsOpenaiKWArgs):
+            args = self.kwargs.to_dict()
+        else:
+            args = deepcopy(self.kwargs)
+
+        args["messages"] = openai_messages
+        args["tools"] = openai_tools
+        args["stream"] = stream
+
+        return args
+
     def call(
         self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
     ) -> JAImsMessage:
-        openai_messages = self.__jaims_messages_to_openai(messages)
-        openai_tools = self.__jaims_tools_to_openai(tools)
-        openai_kw_args = self.kwargs.copy_with_overrides(
-            messages=openai_messages,
-            tools=openai_tools,
-            stream=False,
-        )
-        response = self.___get_openai_response(openai_kw_args, self.options)
+        args = self.__get_args(messages, tools)
+        response = self.___get_openai_response(args, self.options)
         assert isinstance(response, ChatCompletion)
         if self.transaction_storage:
             self.transaction_storage.store_transaction(
-                request=openai_kw_args.to_dict(),
+                request=args,
                 response=response.model_dump(exclude_none=True),
             )
 
@@ -330,14 +337,8 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
     def call_streaming(
         self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
     ) -> Generator[JAImsStreamingMessage, None, None]:
-        openai_messages = self.__jaims_messages_to_openai(messages)
-        openai_tools = self.__jaims_tools_to_openai(tools)
-        openai_kw_args = self.kwargs.copy_with_overrides(
-            messages=openai_messages,
-            tools=openai_tools,
-            stream=True,
-        )
-        response = self.___get_openai_response(openai_kw_args, self.options)
+        args = self.__get_args(messages, tools, stream=True)
+        response = self.___get_openai_response(args, self.options)
         assert isinstance(response, Stream)
 
         accumulated_delta = None
@@ -351,7 +352,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         if self.transaction_storage and accumulated_delta:
             self.transaction_storage.store_transaction(
-                request=openai_kw_args.to_dict(),
+                request=args,
                 response=accumulated_delta.model_dump(exclude_none=True),
             )
 
@@ -518,7 +519,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def ___get_openai_response(
         self,
-        openai_kw_args: JAImsOpenaiKWArgs,
+        openai_kw_args: dict,
         call_options: JAImsOptions,
     ) -> Union[ChatCompletion, Stream[ChatCompletionChunk]]:
 
@@ -539,7 +540,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         def openai_api_call():
             client = OpenAI(api_key=self.api_key)
-            kwargs = openai_kw_args.to_dict()
+            kwargs = openai_kw_args
             response = client.chat.completions.create(
                 **kwargs,
             )
@@ -627,7 +628,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 def create_jaims_openai(
     api_key: Optional[str] = None,
     options: Optional[JAImsOptions] = None,
-    kwargs: Optional[JAImsOpenaiKWArgs] = None,
+    kwargs: Optional[Union[JAImsOpenaiKWArgs, Dict]] = None,
     transaction_storage: Optional[OpenAITransactionStorageInterface] = None,
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,

@@ -11,9 +11,7 @@ from jaims import (
 from jaims.adapters.openai_adapter import (
     JAImsOpenaiKWArgs,
     create_jaims_openai,
-    JAImsGPTModel,
     OpenAITransactionStorageInterface,
-    JAImsOptions,
 )
 
 import os
@@ -111,9 +109,9 @@ def main():
     """
 
     agent = create_jaims_openai(
-        kwargs=JAImsOpenaiKWArgs(
-            model=JAImsGPTModel.GPT_3_5_TURBO_0613,
-        ),
+        kwargs={
+            "model": "gpt-3.5-turbo-0613",
+        },
         history_manager=JAImsDefaultHistoryManager(
             leading_prompts=[JAImsMessage.system_message(persona)]
         ),

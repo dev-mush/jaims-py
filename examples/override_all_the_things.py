@@ -16,7 +16,6 @@ from jaims.adapters.openai_adapter import (
     create_jaims_openai,
     JAImsOpenaiKWArgs,
     JAImsOptions,
-    JAImsGPTModel,
     JAImsOpenaiAdapter,
 )
 
@@ -80,13 +79,18 @@ class MyCustomToolManager(JAImsToolManager):
                 openai_adapter = agent.llm_interface
                 assert isinstance(openai_adapter, JAImsOpenaiAdapter)
                 current_kwargs = openai_adapter.kwargs
+                if isinstance(current_kwargs, dict):
+                    current_kwargs = JAImsOpenaiKWArgs.from_dict(current_kwargs)
+
                 new_model = (
-                    JAImsGPTModel.GPT_3_5_TURBO_0613
-                    if current_kwargs.model == JAImsGPTModel.GPT_4_0613
-                    else JAImsGPTModel.GPT_4_0613
+                    "gpt-3.5-turbo"
+                    if current_kwargs.model == "gpt-4-turbo"
+                    else "gpt-4-turbo"
                 )
-                override_kwargs = current_kwargs.copy_with_overrides(model=new_model)
-                openai_adapter.kwargs = override_kwargs
+
+                openai_adapter.kwargs = current_kwargs.copy_with_overrides(
+                    model=new_model
+                )
                 agent.llm_interface = openai_adapter
                 response_messages.append(
                     JAImsMessage.tool_response_message(
@@ -139,7 +143,7 @@ def main():
 
     agent = create_jaims_openai(
         kwargs=JAImsOpenaiKWArgs(
-            model=JAImsGPTModel.GPT_3_5_TURBO_0613,
+            model="gpt-4-turbo",
         ),
         history_manager=JAImsDefaultHistoryManager(
             leading_prompts=[

@@ -7,7 +7,6 @@ from jaims import (
 from jaims.adapters.openai_adapter import (
     JAImsOpenaiKWArgs,
     create_jaims_openai,
-    JAImsGPTModel,
 )
 
 from jaims.adapters.google_generative_ai_adapter import (
@@ -30,7 +29,7 @@ def main():
 
     openai_agent = create_jaims_openai(
         kwargs=JAImsOpenaiKWArgs(
-            model=JAImsGPTModel.GPT_4_VISION_PREVIEW,
+            model="gpt-4-turbo",
             stream=stream,
         ),
     )
@@ -50,21 +49,21 @@ def main():
         )
     ]
 
-    # openai_response = openai_agent.run(
-    #     [
-    #         JAImsMessage(
-    #             role=JAImsMessageRole.USER,
-    #             contents=[
-    #                 "Are these images the same? What do they contain?",
-    #                 JAImsImageContent(pil_image),
-    #                 JAImsImageContent(image_url),
-    #             ],
-    #         )
-    #     ]
-    # )
+    openai_response = openai_agent.run(
+        [
+            JAImsMessage(
+                role=JAImsMessageRole.USER,
+                contents=[
+                    "Are these images the same? What do they contain?",
+                    JAImsImageContent(pil_image),
+                    JAImsImageContent(image_url),
+                ],
+            )
+        ]
+    )
 
-    # # print("OpenAI Response:")
-    # # print(openai_response)
+    # print("OpenAI Response:")
+    # print(openai_response)
 
     gemini_response = gemini_agent.run(
         [

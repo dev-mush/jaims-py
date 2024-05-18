@@ -70,7 +70,7 @@ func_wrapper = JAImsFuncWrapper(
 # instantiate the agent passing the functions
 agent = JAImsAgent(
         openai_kwargs=JAImsOpenaiKWArgs(
-            model=JAImsGPTModel.GPT_4,
+            model="gpt-4-turbo",
             tools=[
                 func_wrapper,
             ],

@@ -4,6 +4,7 @@ import time
 from jaims import (
     JAImsAgent,
     JAImsFunctionTool,
+    JAImsDefaultHistoryManager,
     JAImsFunctionToolDescriptor,
     JAImsParamDescriptor,
     JAImsJsonSchemaType,
@@ -13,7 +14,6 @@ from jaims import (
 from jaims.adapters.openai_adapter import (
     JAImsOpenaiKWArgs,
     create_jaims_openai,
-    JAImsGPTModel,
     OpenAITransactionStorageInterface,
 )
 
@@ -68,7 +68,7 @@ class FileTransactionStorage(OpenAITransactionStorageInterface):
 
 
 def main():
-    stream = False
+    stream = True
 
     sum_func_wrapper = JAImsFunctionTool(
         function=sum,
@@ -142,10 +142,18 @@ def main():
 
     agent = create_jaims_openai(
         kwargs=JAImsOpenaiKWArgs(
-            model=JAImsGPTModel.GPT_4_1106_PREVIEW,
+            model="gpt-4-turbo-2024-04-09",
             stream=stream,
         ),
         transaction_storage=FileTransactionStorage(),
+        history_manager=JAImsDefaultHistoryManager(
+            history=[
+                JAImsMessage.assistant_message(
+                    text="Hello, I am JAIms, your personal assistant."
+                ),
+                JAImsMessage.assistant_message(text="How can I help you today?"),
+            ]
+        ),
         tools=[
             sum_func_wrapper,
             multiply_func_wrapper,
@@ -160,18 +168,19 @@ def main():
         user_input = input("> ")
         if user_input == "exit":
             break
-        response = agent.run(
-            [JAImsMessage.user_message(text=user_input)],
-        )
 
-        if response:
-            if stream:
-                for chunk in response:
-                    print(chunk, end="", flush=True)
-                print("\n")
-
-            else:
-                print(response)
+        if stream:
+            response = agent.run_stream(
+                [JAImsMessage.user_message(text=user_input)],
+            )
+            for chunk in response:
+                print(chunk, end="", flush=True)
+            print("\n")
+        else:
+            response = agent.run(
+                [JAImsMessage.user_message(text=user_input)],
+            )
+            print(response)
 
 
 if __name__ == "__main__":
