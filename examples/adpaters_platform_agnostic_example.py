@@ -10,11 +10,6 @@ from jaims import (
 )
 
 
-"""
-This example shows how to instantiate a platform agnostic jaims agent
-"""
-
-
 def sum(a: int, b: int):
     print("----performing sum----")
     print(a, b)
