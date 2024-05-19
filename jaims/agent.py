@@ -4,8 +4,6 @@ from typing import TYPE_CHECKING, Literal
 if TYPE_CHECKING:
     from .interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
 
-from .factories import openai_factory, google_factory
-
 from typing import Generator, List, Optional
 
 
@@ -83,6 +81,8 @@ class JAImsAgent:
         ], f"curretnly supported providers are: [openai, google] . If you're targeting an unsupported provider you should supply your own adapter instead."
 
         if provider == "openai":
+            from .factories import openai_factory
+
             return openai_factory(
                 model=model,
                 api_key=api_key,
@@ -93,6 +93,8 @@ class JAImsAgent:
                 tools=tools,
             )
         elif provider == "google":
+            from .factories import google_factory
+
             return google_factory(
                 model=model,
                 api_key=api_key,

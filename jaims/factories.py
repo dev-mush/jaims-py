@@ -18,8 +18,8 @@ def openai_factory(
     tools: Optional[List[JAImsFunctionTool]] = None,
 ) -> JAImsAgent:
 
-    from jaims.adapters.openai_adapter import create_jaims_openai
-    from jaims.adapters.openai_adapter import JAImsOpenaiKWArgs
+    from .adapters.openai_adapter import create_jaims_openai
+    from .adapters.openai_adapter import JAImsOpenaiKWArgs
 
     config = config or JAImsLLMConfig()
     options = options or JAImsOptions()
@@ -51,9 +51,10 @@ def google_factory(
     tools: Optional[List[JAImsFunctionTool]] = None,
 ) -> JAImsAgent:
 
-    from jaims.adapters.google_generative_ai_adapter.factory import create_jaims_gemini
-    from google.generativeai.types import generation_types
-    from google.generativeai.types import content_types
+    from .adapters.google_generative_ai_adapter.factory import (
+        create_jaims_gemini,
+        generation_types,
+    )
 
     config = config or JAImsLLMConfig()
     options = options or JAImsOptions()
