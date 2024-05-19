@@ -1,8 +1,5 @@
 import os
-from jaims import (
-    JAImsImageContent,
-    JAImsMessage,
-)
+from jaims import JAImsImageContent, JAImsMessage, JAImsModelCode
 
 from jaims.adapters.openai_adapter import (
     JAImsOpenaiKWArgs,
@@ -11,7 +8,6 @@ from jaims.adapters.openai_adapter import (
 
 from jaims.adapters.google_generative_ai_adapter import (
     create_jaims_gemini,
-    GEMINI_1_PRO_VISION_LATEST,
 )
 
 from PIL import Image
@@ -35,7 +31,7 @@ def main():
     )
 
     gemini_agent = create_jaims_gemini(
-        model=GEMINI_1_PRO_VISION_LATEST,
+        model=JAImsModelCode.GEMINI_1_PRO_VISION_LATEST,
     )
 
     messages = [

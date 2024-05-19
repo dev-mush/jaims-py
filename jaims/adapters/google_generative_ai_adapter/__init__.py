@@ -1,6 +1,5 @@
 from .adapter import (
     JAImsGoogleGenerativeAIAdapter,
-    create_jaims_gemini,
 )
 
-from .constants import *
+from .factory import create_jaims_gemini

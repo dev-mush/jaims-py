@@ -1,8 +1,10 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from .interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
+
+from .factories import openai_factory, google_factory
 
 from typing import Generator, List, Optional
 
@@ -14,13 +16,13 @@ from jaims.entities import (
     JAImsMaxConsecutiveFunctionCallsExceeded,
     JAImsMessage,
     JAImsFunctionTool,
+    JAImsLLMConfig,
+    JAImsOptions,
 )
 
 
 # TODOS:
 # High Priority
-# TODO: Remove the LLM model class and use strings to the adapters
-# TODO: Create an adapter root that offers common classes and methods for instantiating agents based on their identifier
 # TODO: Refactor all docstrings and docs, check imports and remove unused imports
 
 # Mid Priority
@@ -28,6 +30,7 @@ from jaims.entities import (
 # TODO: Implement Tests
 
 # Low Priority
+# TODO: Add support for multiple completion responses
 # TODO: Adjust transaction storage for openai streaming response
 # TODO: Refactor logging entirely
 
@@ -61,25 +64,46 @@ class JAImsAgent:
         self.__session_iteration = -1
         self.__session_messages = []
 
-    def __get_messages_for_run(
-        self, messages: Optional[List[JAImsMessage]]
-    ) -> List[JAImsMessage]:
-        """
-        Processes a list of messages for the agent run and, if necessary, adds them to history.
+    @staticmethod
+    def build(
+        model: str,
+        provider: Literal["openai", "google"],
+        api_key: Optional[str] = None,
+        options: Optional[JAImsOptions] = None,
+        config: Optional[JAImsLLMConfig] = None,
+        history_manager: Optional[JAImsHistoryManager] = None,
+        tool_manager: Optional[JAImsToolManager] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+    ) -> JAImsAgent:
 
-        Args:
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+        # assert provider in ["openai", "google"], "Provider must be either 'openai' or 'google'"
+        assert provider in [
+            "openai",
+            "google",
+        ], f"curretnly supported providers are: [openai, google] . If you're targeting an unsupported provider you should supply your own adapter instead."
 
-        Returns:
-            List[JAImsMessage]: The session messages.
-        """
-        session_messages = messages or []
-
-        if self.history_manager:
-            self.history_manager.add_messages(session_messages)
-            session_messages = self.history_manager.get_messages()
-
-        return session_messages
+        if provider == "openai":
+            return openai_factory(
+                model=model,
+                api_key=api_key,
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
+        elif provider == "google":
+            return google_factory(
+                model=model,
+                api_key=api_key,
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
+        else:
+            raise ValueError("Provider is not supported.")
 
     def __update_session(
         self, session_messages: List[JAImsMessage], max_iterations: int

@@ -1,7 +1,7 @@
 from enum import Enum
 import random
 from typing import Any, Callable
-from .entities import JAImsOptions, JAImsMaxRetriesExceeded
+from ...entities import JAImsOptions, JAImsMaxRetriesExceeded
 import time
 import logging
 

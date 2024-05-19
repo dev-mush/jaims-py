@@ -1,5 +1,4 @@
-import json
-from typing import Any, Dict, List
+from typing import List
 from jaims import (
     JAImsAgent,
     JAImsFunctionTool,
@@ -15,17 +14,10 @@ from jaims import (
 from jaims.adapters.openai_adapter import (
     create_jaims_openai,
     JAImsOpenaiKWArgs,
-    JAImsOptions,
     JAImsOpenaiAdapter,
 )
 
-from examples_utils import FileTransactionStorage
-
-
-"""
-This example shows how to customize classes and how to override parameters
-in between agent runs.
-"""
+from examples._examples_utils import FileTransactionStorage
 
 
 class MyCustomToolManager(JAImsToolManager):
