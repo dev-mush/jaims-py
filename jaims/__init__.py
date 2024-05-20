@@ -25,6 +25,7 @@ from .entities import (
     JAImsModelCode,
     JAImsStreamingMessage,
     JAImsUnexpectedFunctionCall,
+    jaimsfunctiontool,
 )
 
 from .interfaces import JAImsToolManager, JAImsHistoryManager, JAImsLLMInterface
@@ -55,4 +56,5 @@ __all__ = [
     "JAImsToolManager",
     "JAImsHistoryManager",
     "JAImsLLMInterface",
+    "jaimsfunctiontool",
 ]

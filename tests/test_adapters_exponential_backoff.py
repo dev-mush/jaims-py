@@ -1,11 +1,11 @@
 import unittest
 from unittest.mock import MagicMock
-from jaims.adapters.shared.entities import JAImsMaxRetriesExceeded
 from jaims.adapters.shared.exponential_backoff_operation import (
     call_with_exponential_backoff,
     ErrorHandlingMethod,
     JAImsOptions,
 )
+from jaims import JAImsMaxRetriesExceeded
 import time
 
 

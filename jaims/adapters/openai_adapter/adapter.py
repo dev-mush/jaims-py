@@ -435,7 +435,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 "function": {
                     "name": t.function_tool.name,
                     "description": t.function_tool.description,
-                    "parameters": t.function_tool.get_jsonapi_schema(),
+                    "parameters": t.function_tool.get_json_schema(),
                 },
             }
             raw_tools.append(tool_raw_dict)
