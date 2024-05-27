@@ -2,8 +2,6 @@ from __future__ import annotations
 
 # Enum class over all Json Types
 from enum import Enum
-from functools import wraps
-import inspect
 from typing import Any, Callable, Dict, List, Optional, Union
 from PIL import Image
 
@@ -197,9 +195,9 @@ class JAImsParamDescriptor:
         Allowed keys in the dictionary:
             - name (string): the parameter name
             - description (string): the parameter description
-            - json_type (string): the parameter json type, must be one of ["string", "number", "object", "array", "boolean", "null"]
-            - attributes_params_descriptors (optional list): the list of parameters descriptors for the attributes of the parameter
-            - array_type_descriptors (optional list): the parameter descriptors for the array type in case the parameter is an array
+            - type (string): the parameter json type, must be one of ["string", "number", "object", "array", "boolean", "null"]
+            - attributes (optional list): the list of parameters descriptors for the attributes of the parameter
+            - array_types (optional list): the parameter descriptors for the array type in case the parameter is an array
             - array_type_any_valid (bool): whether the array type can be any of the types in the array_type_descriptors
             - enum_values (optional list): the list of values in case the parameter is an enum, either string or number
             - required (optional bool): whether the parameter is required or not
@@ -213,25 +211,19 @@ class JAImsParamDescriptor:
         return JAImsParamDescriptor(
             name=data["name"],
             description=data["description"],
-            json_type=JAImsJsonSchemaType(data["json_type"]),
+            json_type=JAImsJsonSchemaType(data["type"]),
             attributes_params_descriptors=(
-                [
-                    JAImsParamDescriptor.from_dict(attr)
-                    for attr in data["attributes_params_descriptors"]
-                ]
-                if data.get("attributes_params_descriptors")
+                [JAImsParamDescriptor.from_dict(attr) for attr in data["attributes"]]
+                if data.get("attributes")
                 else None
             ),
             array_type_descriptors=(
-                [
-                    JAImsParamDescriptor.from_dict(attr)
-                    for attr in data["array_type_descriptors"]
-                ]
-                if data.get("array_type_descriptors")
+                [JAImsParamDescriptor.from_dict(attr) for attr in data["array_types"]]
+                if data.get("array_types")
                 else None
             ),
             array_type_any_valid=data.get("array_type_any_valid", True),
-            enum_values=data.get("enum_values"),
+            enum_values=data.get("enum"),
             required=data.get("required", True),
         )
 
@@ -311,6 +303,41 @@ class JAImsFunctionToolDescriptor:
         self.description = description
         self.params_descriptors = params_descriptors
 
+    def __eq__(self, value: object) -> bool:
+        if not isinstance(value, JAImsFunctionToolDescriptor):
+            return False
+
+        return (
+            self.name == value.name
+            and self.description == value.description
+            and self.params_descriptors == value.params_descriptors
+        )
+
+    @staticmethod
+    def from_dict(data: Dict[str, Any]) -> JAImsFunctionToolDescriptor:
+        """
+        Creates a JAImsFunctionToolDescriptor instance from a dictionary.
+
+        Allowed keys in the dictionary:
+            - name (string): the tool name
+            - description (string): the tool description
+            - params_descriptors (list): the list of parameters descriptors
+
+        Args:
+            data: the dictionary with the data to create the instance
+
+        Returns:
+            a JAImsFunctionToolDescriptor instance
+        """
+        return JAImsFunctionToolDescriptor(
+            name=data["name"],
+            description=data["description"],
+            params_descriptors=[
+                JAImsParamDescriptor.from_dict(param)
+                for param in data["params_descriptors"]
+            ],
+        )
+
     def get_json_schema(self) -> Dict[str, Any]:
         """
         Returns the jsonapi schema for function.
@@ -375,107 +402,6 @@ class JAImsFunctionTool:
         """
 
         return self.function(**params) if params and self.function else None
-
-
-def infer_json_type(python_type) -> JAImsJsonSchemaType:
-    if python_type in [int, float]:
-        return JAImsJsonSchemaType.NUMBER
-    elif python_type is str:
-        return JAImsJsonSchemaType.STRING
-    elif python_type is bool:
-        return JAImsJsonSchemaType.BOOLEAN
-    elif python_type is None:
-        return JAImsJsonSchemaType.NULL
-    elif python_type in [
-        list,
-        set,
-        tuple,
-    ]:  # Assuming list-like structures map to array
-        return JAImsJsonSchemaType.ARRAY
-    elif hasattr(python_type, "__annotations__"):
-        return JAImsJsonSchemaType.OBJECT  # Default to object for complex types
-    else:
-        raise ValueError(f"Unsupported type {python_type}")
-
-
-def jaimsfunctiontool(
-    description: str,
-    name: Optional[str] = None,
-    param_descriptors: Optional[Dict[str, Any]] = None,
-):
-    """
-    Decorator to create a JAImsFunctionToolDescriptor from a function.
-
-    The decorator uses the following syntax to parse the param_descriptors attributes to generate descriptors for the function parameters:
-
-    - Each key of the dictionary matches the name of the parameter in the function signature (or the name of the attribute in the objects), in this case the value can be:
-      - a string used as description of the parameter for primitive types, the json type will be inferred with reflection.
-      - a dictionary for object types, with string keys for each attribute of the object and values that follow the same rules.
-
-    In this case the json type is always inferred with reflection, enum values aren't supported, and the required flag is always True.
-    In case you need more control, you can prefix the key with "@jaimsparam_", in this case the value MUST be a dictionary with the following keys:
-        - description: the description of the parameter
-        - json_type [optional]: the json type of the parameter, must be: "string", "number", "object", "array", "boolean", "null", otherwise it will be inferred with reflection
-        - required [optional]: whether the parameter is required or not, defaults to True
-        - attributes: a dictionary with the attributes of the object, following the same syntax rules
-        - enum_values [optional]: a list of values in case the parameter is an enum, defaults to None
-
-    Args:
-        name: the name of the tool, if None the function name will be used
-        description: the description of the tool
-        param_descriptors: a dictionary with the descriptors of the parameters, following the syntax rules described above.
-    """
-
-    def decorator(func):
-        sig = inspect.signature(func)
-        tool_name = name if name else func.__name__
-        dict_descriptors = []
-
-        for param_name, param in sig.parameters.items():
-            if param_descriptors is None:
-                dict_descriptors.append(
-                    JAImsParamDescriptor(
-                        name=param_name,
-                        description="",
-                        json_type=infer_json_type(param.annotation),
-                        required=param.default == True,
-                    )
-                )
-
-        @wraps(func)
-        def wrapped(*args, **kwargs):
-            return func(*args, **kwargs)
-
-        return JAImsFunctionTool(
-            function=wrapped,
-            function_tool_descriptor=JAImsFunctionToolDescriptor(
-                name=tool_name,
-                description=description,
-                params_descriptors=[],
-            ),
-        )
-
-    return decorator
-
-
-def google_style_function_tool_builder(func):
-    """
-    Receives a Google Style documented function and parses its doc by returning a JAImsFunctionTool instance.
-
-    It will take the first line of the docstring as description for the function_tool_descriptor and iteratively inspect the Attributes by looking for the line after the \"Args:\" section of the docstring for lines that begin with either \"{arg_name}": \" or \"{arg_name} ({arg_type}): \".
-    When it finds an attributes that is a primitive type, it will map it to the corresponding JAImsJsonSchemaType, otherwise if it is a class it will recursively inspect the class to find its attributes in the \"Attributes:\" section of the docstring following the same logic.
-    Non matching lines will be left without description.
-
-    Args:
-        func: a function with a Google Style docstring
-
-    Returns:
-        a JAImsFunctionTool instance
-    """
-
-    # assert func is a function otherwise raise an exception
-    if not callable(func):
-        raise ValueError("passed func must be a function")
 
 
 # -----------------------------------

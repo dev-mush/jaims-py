@@ -25,8 +25,9 @@ from .entities import (
     JAImsModelCode,
     JAImsStreamingMessage,
     JAImsUnexpectedFunctionCall,
-    jaimsfunctiontool,
 )
+
+from .function_tool_decorator import jaimsfunctiontool
 
 from .interfaces import JAImsToolManager, JAImsHistoryManager, JAImsLLMInterface
 
