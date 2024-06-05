@@ -17,6 +17,7 @@ def create_jaims_openai(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
 ) -> JAImsAgent:
     """
     Creates a JAIms instance with an OpenAI adapter.
@@ -29,6 +30,7 @@ def create_jaims_openai(
         history_manager (Optional[JAImsHistoryManager], optional): The history manager. Defaults to None.
         tool_manager (Optional[JAImsToolManager], optional): The tool manager. Defaults to None.
         tools (Optional[List[JAImsFunctionTool]], optional): The list of function tools. Defaults to None.
+        tool_constraints (Optional[List[str]], optional): The list of tool constraints. Defaults to None (auto mode)
 
     Returns:
         JAImsAgent: The JAIms agent, initialized with the OpenAI adapter.
@@ -45,6 +47,7 @@ def create_jaims_openai(
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
 
     return agent

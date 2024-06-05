@@ -22,6 +22,7 @@ from jaims.entities import (
 # TODOS:
 # High Priority
 # TODO: Refactor all docstrings and docs, check imports and remove unused imports
+# TODO: Implement better tool constraints
 
 # Mid Priority
 # TODO: Implement a method to pass a function directly instead of the jaims descriptors
@@ -54,10 +55,12 @@ class JAImsAgent:
         history_manager: Optional[JAImsHistoryManager] = None,
         tool_manager: Optional[JAImsToolManager] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
     ):
         self.llm_interface = llm_interface
         self.tool_manager = tool_manager or JAImsDefaultToolManager()
         self.tools = tools or []
+        self.tool_constraints = tool_constraints or []
         self.history_manager = history_manager
         self.__session_iteration = -1
         self.__session_messages = []
@@ -72,6 +75,7 @@ class JAImsAgent:
         history_manager: Optional[JAImsHistoryManager] = None,
         tool_manager: Optional[JAImsToolManager] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
     ) -> JAImsAgent:
 
         # assert provider in ["openai", "google"], "Provider must be either 'openai' or 'google'"
@@ -91,6 +95,7 @@ class JAImsAgent:
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
+                tool_constraints=tool_constraints,
             )
         elif provider == "google":
             from .factories import google_factory
@@ -103,6 +108,7 @@ class JAImsAgent:
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
+                tool_constraints=tool_constraints,
             )
         else:
             raise ValueError("Provider is not supported.")
@@ -120,21 +126,21 @@ class JAImsAgent:
         else:
             self.__session_messages.extend(session_messages)
 
-    def __end_session(self, response: Optional[JAImsMessage] = None):
+    def __end_session(self, messages: List[JAImsMessage]):
 
-        if self.history_manager and response:
-            self.history_manager.add_messages([response])
+        if self.history_manager:
+            self.history_manager.add_messages(messages)
 
         self.__session_iteration = -1
         self.__session_messages = []
 
-    def __evaluate_tool_results(self, message: Optional[JAImsMessage]):
+    def __get_tool_results(self, message: JAImsMessage) -> List[JAImsMessage]:
         tool_results = []
         if message and message.tool_calls:
             tool_call_results = self.tool_manager.handle_tool_calls(
                 self, message.tool_calls, self.tools
             )
-            tool_results = [message] + tool_call_results
+            tool_results.extend(tool_call_results)
 
         return tool_results
 
@@ -158,11 +164,11 @@ class JAImsAgent:
 
         response_message = self.llm_interface.call(self.__session_messages, self.tools)
 
-        tool_results = self.__evaluate_tool_results(response_message)
-        if tool_results:
-            return self.run(tool_results, max_iterations)
+        tool_results = self.__get_tool_results(response_message)
+        if tool_results and not self.tool_constraints:
+            return self.run([response_message] + tool_results, max_iterations)
 
-        self.__end_session(response_message)
+        self.__end_session([response_message] + tool_results)
         return response_message.get_text() or ""
 
     def run_stream(
@@ -192,9 +198,14 @@ class JAImsAgent:
             response_message = delta_resp.message
             yield delta_resp.textDelta or ""
 
-        tool_results = self.__evaluate_tool_results(response_message)
-        if tool_results:
-            yield from self.run_stream(tool_results, max_iterations)
+        if not response_message:
             return
 
-        self.__end_session(response_message)
+        tool_results = self.__get_tool_results(response_message)
+        if tool_results and not self.tool_constraints:
+            yield from self.run_stream(
+                [response_message] + tool_results, max_iterations
+            )
+            return
+
+        self.__end_session([response_message] + tool_results)

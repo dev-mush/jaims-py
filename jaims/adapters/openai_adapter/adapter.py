@@ -108,20 +108,16 @@ class JAImsOpenaiKWArgs:
             "top_p": self.top_p,
             "max_tokens": self.max_tokens,
             "seed": self.seed,
+            "tools": self.tools,
+            "tool_choice": self.tool_choice,
             "frequency_penalty": self.frequency_penalty,
             "presence_penalty": self.presence_penalty,
             "response_format": self.response_format,
             "stop": self.stop,
         }
 
+        # Remove None values
         kwargs = {key: value for key, value in kwargs.items() if value is not None}
-
-        if self.logit_bias:
-            kwargs["logit_bias"] = self.logit_bias
-
-        if self.tools:
-            kwargs["tools"] = self.tools
-            kwargs["tool_choice"] = self.tool_choice
 
         return kwargs
 
