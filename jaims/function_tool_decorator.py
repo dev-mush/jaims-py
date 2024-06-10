@@ -78,60 +78,115 @@ def infer_list_types(input_type: Any) -> List[Type]:
 def format_param_descriptor_dict(
     param_type: Any,
     param_name: Optional[str] = None,
-    param_description: Optional[str] = None,
+    param_descriptor: Optional[Union[str, Dict]] = None,
 ) -> Dict[str, Any]:
-    print(param_type)
-    inferred_type = infer_json_type(param_type)
-    name = param_name or param_type.__name__
-    param_description = param_description or ""
 
-    descriptor = {
-        "name": name,
-        "description": param_description,
-        "type": inferred_type,
-        "required": True,
-    }
+    # checking if the passed descriptor is valid
+    if param_descriptor is not None and not isinstance(param_descriptor, (str, dict)):
+        raise ValueError(
+            f"Invalid descriptor '{param_descriptor}' for {param_type}. Descriptors must be a string or a dictionary"
+        )
 
-    if inferred_type == "enum":
+    # if the descriptor is a dictionary, override inferred values with the passed ones
+    if isinstance(param_descriptor, dict):
+        param_name_repr = param_descriptor.get(
+            "name", param_name or param_type.__name__
+        )
+        description = param_descriptor.get("description", "")
+        type_string_repr = param_descriptor.get(
+            "json_type", infer_json_type(param_type)
+        )
+        enum_values_repr = param_descriptor.get("enum", None)
+        required = param_descriptor.get("required", True)
+        attributes_descriptors = param_descriptor.get("attributes", {})
+        array_types_descriptors = param_descriptor.get("array_types", {})
+
+    else:
+        param_name_repr = param_name or param_type.__name__
+        description = param_descriptor or ""
+        type_string_repr = infer_json_type(param_type)
+        required = True
+        attributes_descriptors = {}
+        array_types_descriptors = {}
+        enum_values_repr = None
+
+    if type_string_repr == "enum":
         jsonschema_enum_type = enum_to_json_schema(param_type)
-        descriptor["type"] = jsonschema_enum_type["type"]
-        descriptor["enum"] = jsonschema_enum_type["enum"]
+        return {
+            "name": param_name_repr,
+            "description": description,
+            "type": jsonschema_enum_type["type"],
+            "enum": jsonschema_enum_type["enum"],
+            "required": required,
+        }
 
-    if inferred_type == "dict":
-        descriptor["type"] = "object"
+    if type_string_repr == "dict":
+        return {
+            "name": param_name_repr,
+            "description": description,
+            "type": "object",
+            "required": required,
+        }
 
-    elif inferred_type == "array":
+    elif type_string_repr == "array":
         array_types = infer_list_types(param_type)
         if array_types:
             array_type_descriptors = []
             for array_item_type in array_types:
+
+                item_type_descriptor = array_types_descriptors.get(
+                    array_item_type.__name__, None
+                )
+
                 array_type_descriptors.append(
                     format_param_descriptor_dict(
                         param_type=array_item_type,
+                        param_descriptor=item_type_descriptor,
                     )
                 )
-            descriptor["array_type_descriptors"] = array_type_descriptors
+            return {
+                "name": param_name_repr,
+                "description": description,
+                "type": "array",
+                "array_types": array_type_descriptors,
+                "required": required,
+            }
 
-    elif inferred_type == "object":
+    elif type_string_repr == "object":
         attributes_param_descriptors = []
         for attribute, value in param_type.__init__.__annotations__.items():
             attributes_param_descriptors.append(
                 format_param_descriptor_dict(
                     param_type=value,
                     param_name=attribute,
+                    param_descriptor=attributes_descriptors.get(attribute, None),
                 )
             )
-        descriptor["attributes_params_descriptors"] = attributes_param_descriptors
+        return {
+            "name": param_name_repr,
+            "description": description,
+            "type": "object",
+            "attributes": attributes_param_descriptors,
+            "required": required,
+        }
 
-    return descriptor
+    return {
+        "name": param_name_repr,
+        "description": description,
+        "type": type_string_repr,
+        "required": required,
+        "enum": enum_values_repr,
+    }
 
 
 def jaimsfunctiontool(
-    description: str,
     name: Optional[str] = None,
+    description: Optional[str] = None,
     param_descriptors: Optional[Dict[str, Any]] = None,
 ):
     """
+    [Experimental]
+
     Decorator to create a JAImsFunctionToolDescriptor from a function.
 
     The decorator uses the following syntax to parse the param_descriptors attributes to generate descriptors for the function parameters:
@@ -140,17 +195,17 @@ def jaimsfunctiontool(
       - a string used as description of the parameter for primitive types, the json type will be inferred with reflection.
       - a dictionary for object types, with string keys for each attribute of the object and values that follow the same rules.
 
-    In this case the json type is always inferred with reflection, enum values aren't supported, and the required flag is always True.
-    In case you need more control, you can prefix the key with "@jaimsparam_", in this case the value MUST be a dictionary with the following keys:
-        - description: the description of the parameter
-        - json_type [optional]: the json type of the parameter, must be: "string", "number", "object", "array", "boolean", "null", otherwise it will be inferred with reflection
-        - required [optional]: whether the parameter is required or not, defaults to True
-        - attributes: a dictionary with the attributes of the object, following the same syntax rules
-        - enum_values [optional]: a list of values in case the parameter is an enum, defaults to None
+    Use the following optional keys to define the parameter descriptor:
+        - description : the description of the parameter, when not passed defaults to empty string
+        - json_type: when not passed it is inferred with reflection
+        - required: whether the parameter is required or not, defaults to True
+        - attributes: a dictionary with the attributes of the object, following the same syntax rules (so either string or dictionary)
+        - enum: a list of values in case the parameter is an enum, defaults to None
+        - array_types: a dictionary with the descriptors of the array types, following the same syntax rules (so either string or dictionary)
 
     Args:
         name: the name of the tool, if None the function name will be used
-        description: the description of the tool
+        description: the description of the tool, defaults to empty string
         param_descriptors: a dictionary with the descriptors of the parameters, following the syntax rules described above.
     """
 
@@ -170,14 +225,14 @@ def jaimsfunctiontool(
                 format_param_descriptor_dict(
                     param_type=param.annotation,
                     param_name=param_name,
-                    param_description=passed_descriptors.get(param_name, ""),
+                    param_descriptor=passed_descriptors.get(param_name, None),
                 )
             )
 
         func_tool_raw_descriptor = {
             "name": tool_name,
-            "description": description,
-            "params_descriptors": raw_descriptors,
+            "description": description or "",
+            "params": raw_descriptors,
         }
 
         @wraps(func)

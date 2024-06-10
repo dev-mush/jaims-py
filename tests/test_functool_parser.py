@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, List
 import unittest
 from enum import Enum
@@ -195,6 +196,11 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
             return "hello test"
 
         result_tool_descriptor = store_person.function_tool
+        if result_tool_descriptor != expected_func_tool_descriptor:
+            print("\n\nRESULT:")
+            print(json.dumps(result_tool_descriptor.to_dict(), indent=4))
+            print("\n\nEXPECTED:")
+            print(json.dumps(expected_func_tool_descriptor.to_dict(), indent=4))
 
         self.assertEqual(result_tool_descriptor, expected_func_tool_descriptor)
 
@@ -373,17 +379,19 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
             param_descriptors={
                 "id": "the identifier of the person",
                 "person": {
-                    "description": "name of the person",
+                    "description": "a person record",
                     "attributes": {
                         "name": "name of the person",
                         "gender": "gender of the person",
                         "addresses": {
                             "description": "list of addresses",
-                            "array": {
-                                "description": "an address record",
-                                "attributes": {
-                                    "street": "street name",
-                                    "city": "city name",
+                            "array_types": {
+                                "MockAddress": {
+                                    "description": "an address record",
+                                    "attributes": {
+                                        "street": "street name",
+                                        "city": "city name",
+                                    },
                                 },
                             },
                         },
@@ -395,6 +403,122 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
             return "hello test"
 
         result_tool_descriptor = store_person.function_tool
+
+        if result_tool_descriptor != expected_func_tool_descriptor:
+            print("\n\nRESULT:")
+            print(json.dumps(result_tool_descriptor.to_dict(), indent=4))
+            print("\n\nEXPECTED:")
+            print(json.dumps(expected_func_tool_descriptor.to_dict(), indent=4))
+
+        self.assertEqual(result_tool_descriptor, expected_func_tool_descriptor)
+
+    def test_decorator_builds_structured_parameters_with_mixed_descriptor_strings_and_dicts(
+        self,
+    ):
+
+        class MockAddress:
+            def __init__(self, street: str, city: str):
+                self.street = street
+                self.city = city
+
+        class Gender(Enum):
+            MALE = "male"
+            FEMALE = "female"
+            OTHER = "other"
+
+        class MockPerson:
+            def __init__(
+                self,
+                name: str,
+                gender: Gender,
+                addresses: List[MockAddress],
+            ):
+                self.name = name
+                self.gender = gender
+                self.addresses = addresses
+
+        expected_func_tool_descriptor = JAImsFunctionToolDescriptor(
+            name="store_person",
+            description="store person info",
+            params_descriptors=[
+                JAImsParamDescriptor(
+                    name="id",
+                    json_type=JAImsJsonSchemaType.STRING,
+                    description="the identifier of the person",
+                ),
+                JAImsParamDescriptor(
+                    name="person",
+                    json_type=JAImsJsonSchemaType.OBJECT,
+                    description="a person record",
+                    attributes_params_descriptors=[
+                        JAImsParamDescriptor(
+                            name="name",
+                            json_type=JAImsJsonSchemaType.STRING,
+                            description="name of the person",
+                        ),
+                        JAImsParamDescriptor(
+                            name="gender",
+                            json_type=JAImsJsonSchemaType.STRING,
+                            description="gender of the person",
+                            enum_values=["male", "female", "other"],
+                        ),
+                        JAImsParamDescriptor(
+                            name="addresses",
+                            json_type=JAImsJsonSchemaType.ARRAY,
+                            description="list of addresses",
+                            array_type_descriptors=[
+                                JAImsParamDescriptor(
+                                    name="MockAddress",
+                                    json_type=JAImsJsonSchemaType.OBJECT,
+                                    description="",
+                                    attributes_params_descriptors=[
+                                        JAImsParamDescriptor(
+                                            name="street",
+                                            json_type=JAImsJsonSchemaType.STRING,
+                                            description="",
+                                        ),
+                                        JAImsParamDescriptor(
+                                            name="city",
+                                            json_type=JAImsJsonSchemaType.STRING,
+                                            description="",
+                                        ),
+                                    ],
+                                )
+                            ],
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        @jaimsfunctiontool(
+            description="store person info",
+            param_descriptors={
+                "id": "the identifier of the person",
+                "person": {
+                    "description": "a person record",
+                    "attributes": {
+                        "name": "name of the person",
+                        "gender": {
+                            "json_type": "string",
+                            "description": "gender of the person",
+                            "enum": ["male", "female", "other"],
+                        },
+                        "addresses": "list of addresses",
+                    },
+                },
+            },
+        )
+        def store_person(id: str, person: MockPerson):
+            return "hello test"
+
+        result_tool_descriptor = store_person.function_tool
+
+        if result_tool_descriptor != expected_func_tool_descriptor:
+            print("\n\nRESULT:")
+            print(json.dumps(result_tool_descriptor.to_dict(), indent=4))
+            print("\n\nEXPECTED:")
+            print(json.dumps(expected_func_tool_descriptor.to_dict(), indent=4))
 
         self.assertEqual(result_tool_descriptor, expected_func_tool_descriptor)
 

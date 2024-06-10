@@ -227,6 +227,35 @@ class JAImsParamDescriptor:
             required=data.get("required", True),
         )
 
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Returns a dictionary representation of the parameter descriptor.
+        """
+        descriptor = {
+            "name": self.name,
+            "description": self.description,
+            "type": self.json_type.value,
+            "required": self.required,
+        }
+
+        if self.attributes_params_descriptors:
+            descriptor["attributes"] = [
+                attr.to_dict() for attr in self.attributes_params_descriptors
+            ]
+
+        if self.array_type_descriptors:
+            descriptor["array_types"] = [
+                attr.to_dict() for attr in self.array_type_descriptors
+            ]
+
+        if self.array_type_any_valid:
+            descriptor["array_type_any_valid"] = self.array_type_any_valid
+
+        if self.enum_values:
+            descriptor["enum"] = self.enum_values
+
+        return descriptor
+
     def __eq__(self, value: object) -> bool:
         if not isinstance(value, JAImsParamDescriptor):
             return False
@@ -333,10 +362,19 @@ class JAImsFunctionToolDescriptor:
             name=data["name"],
             description=data["description"],
             params_descriptors=[
-                JAImsParamDescriptor.from_dict(param)
-                for param in data["params_descriptors"]
+                JAImsParamDescriptor.from_dict(param) for param in data["params"]
             ],
         )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """
+        Returns a dictionary representation of the tool descriptor.
+        """
+        return {
+            "name": self.name,
+            "description": self.description,
+            "params": [param.to_dict() for param in self.params_descriptors],
+        }
 
     def get_json_schema(self) -> Dict[str, Any]:
         """
