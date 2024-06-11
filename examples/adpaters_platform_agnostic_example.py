@@ -1,15 +1,16 @@
 from jaims import (
     JAImsAgent,
-    JAImsFunctionTool,
     JAImsDefaultHistoryManager,
-    JAImsFunctionToolDescriptor,
-    JAImsParamDescriptor,
-    JAImsJsonSchemaType,
     JAImsMessage,
     JAImsLLMConfig,
+    jaimsfunctiontool,
 )
 
 
+@jaimsfunctiontool(
+    description="use this function when the user wants to sum two numbers",
+    params_descriptions={"a": "the first operand", "b": "the second operand"},
+)
 def sum(a: int, b: int):
     print("----performing sum----")
     print(a, b)
@@ -17,47 +18,24 @@ def sum(a: int, b: int):
     return a + b
 
 
+@jaimsfunctiontool(
+    description="use this function when the user wants to subtract two numbers",
+    params_descriptions={"a": "the first operand", "b": "the second operand"},
+)
+def multiply(a: int, b: int):
+    print("----performing multiplication----")
+    print(a, b)
+    print("----------------------------------")
+    return a * b
+
+
+@jaimsfunctiontool(
+    description="use this function when the user wants to multiply two numbers"
+)
 def store_sum(result: int):
     print("----storing sum----")
     print(result)
     print("-------------------")
-
-
-sum_func_wrapper = JAImsFunctionTool(
-    function=sum,
-    function_tool_descriptor=JAImsFunctionToolDescriptor(
-        name="sum",
-        description="use this function when the user wants to sum two numbers",
-        params_descriptors=[
-            JAImsParamDescriptor(
-                name="a",
-                description="first operand",
-                json_type=JAImsJsonSchemaType.NUMBER,
-            ),
-            JAImsParamDescriptor(
-                name="b",
-                description="second operand",
-                json_type=JAImsJsonSchemaType.NUMBER,
-            ),
-        ],
-    ),
-)
-
-
-result_func_wrapper = JAImsFunctionTool(
-    function=store_sum,
-    function_tool_descriptor=JAImsFunctionToolDescriptor(
-        name="store_sum_result",
-        description="this function MUST be called every time after a sum function is called to store its result.",
-        params_descriptors=[
-            JAImsParamDescriptor(
-                name="result",
-                description="the result of a sum",
-                json_type=JAImsJsonSchemaType.NUMBER,
-            ),
-        ],
-    ),
-)
 
 
 def main():
@@ -83,8 +61,9 @@ def main():
             ]
         ),
         tools=[
-            sum_func_wrapper,
-            result_func_wrapper,
+            sum,
+            multiply,
+            store_sum,
         ],
     )
 

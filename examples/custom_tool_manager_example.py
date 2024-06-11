@@ -4,11 +4,11 @@ from jaims import (
     JAImsFunctionTool,
     JAImsToolCall,
     JAImsMessage,
-    JAImsParamDescriptor,
     JAImsFunctionToolDescriptor,
-    JAImsJsonSchemaType,
     JAImsToolManager,
     JAImsDefaultHistoryManager,
+    create_model,
+    Field,
 )
 
 from jaims.adapters.openai_adapter import (
@@ -98,16 +98,12 @@ class MyCustomToolManager(JAImsToolManager):
 def main():
 
     echo_wrapper = JAImsFunctionTool(
-        JAImsFunctionToolDescriptor(
+        descriptor=JAImsFunctionToolDescriptor(
             name="echo",
             description="use this function when the user asks you to echo some string",
-            params_descriptors=[
-                JAImsParamDescriptor(
-                    name="value",
-                    description="the string to echo",
-                    json_type=JAImsJsonSchemaType.STRING,
-                )
-            ],
+            params=create_model(
+                "echo_params", value=(str, Field(description="the string to echo"))
+            ),
         ),
     )
 
@@ -115,13 +111,10 @@ def main():
         JAImsFunctionToolDescriptor(
             name="reverse",
             description="use this function when the user asks you to reverse some string",
-            params_descriptors=[
-                JAImsParamDescriptor(
-                    name="value",
-                    description="the string to reverse",
-                    json_type=JAImsJsonSchemaType.STRING,
-                )
-            ],
+            params=create_model(
+                "reverse_params",
+                value=(str, Field(description="the string to reverse")),
+            ),
         ),
     )
 
@@ -129,7 +122,7 @@ def main():
         JAImsFunctionToolDescriptor(
             name="change_model",
             description="use this function when the user asks you to change the current model",
-            params_descriptors=[],
+            params=None,
         ),
     )
 

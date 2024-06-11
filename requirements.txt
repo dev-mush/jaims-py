@@ -1,1 +1,2 @@
 Pillow==10.3.0
+pydantic==2.7.1

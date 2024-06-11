@@ -429,9 +429,9 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             tool_raw_dict = {
                 "type": "function",
                 "function": {
-                    "name": t.function_tool.name,
-                    "description": t.function_tool.description,
-                    "parameters": t.function_tool.get_json_schema(),
+                    "name": t.descriptor.name,
+                    "description": t.descriptor.description,
+                    "parameters": t.descriptor.json_schema(),
                 },
             }
             raw_tools.append(tool_raw_dict)

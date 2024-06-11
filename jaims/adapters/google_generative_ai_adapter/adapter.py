@@ -77,9 +77,9 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
         for jaims_tool in jaims_tools:
             function_declarations.append(
                 content_types.FunctionDeclaration(
-                    name=jaims_tool.function_tool.name,
-                    description=jaims_tool.function_tool.description,
-                    parameters=jaims_tool.function_tool.get_json_schema(),
+                    name=jaims_tool.descriptor.name,
+                    description=jaims_tool.descriptor.description,
+                    parameters=jaims_tool.descriptor.json_schema(),
                 ),
             )
 

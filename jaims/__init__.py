@@ -15,8 +15,6 @@ from .entities import (
     JAImsFunctionTool,
     JAImsMaxConsecutiveFunctionCallsExceeded,
     JAImsFunctionToolDescriptor,
-    JAImsParamDescriptor,
-    JAImsJsonSchemaType,
     JAImsToolCall,
     JAImsLLMConfig,
     JAImsOptions,
@@ -31,6 +29,8 @@ from .function_tool_decorator import jaimsfunctiontool
 
 from .interfaces import JAImsToolManager, JAImsHistoryManager, JAImsLLMInterface
 
+from pydantic import BaseModel, Field, create_model
+
 __all__ = [
     "JAImsAgent",
     "JAImsDefaultToolManager",
@@ -44,8 +44,6 @@ __all__ = [
     "JAImsFunctionTool",
     "JAImsMaxConsecutiveFunctionCallsExceeded",
     "JAImsFunctionToolDescriptor",
-    "JAImsParamDescriptor",
-    "JAImsJsonSchemaType",
     "JAImsToolCall",
     "JAImsLLMConfig",
     "JAImsOptions",
@@ -58,4 +56,7 @@ __all__ = [
     "JAImsHistoryManager",
     "JAImsLLMInterface",
     "jaimsfunctiontool",
+    "BaseModel",
+    "Field",
+    "create_model",
 ]

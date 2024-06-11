@@ -5,9 +5,8 @@ from jaims import (
     JAImsFunctionTool,
     JAImsDefaultHistoryManager,
     JAImsFunctionToolDescriptor,
-    JAImsParamDescriptor,
-    JAImsJsonSchemaType,
     JAImsMessage,
+    jaimsfunctiontool,
 )
 
 from jaims.adapters.openai_adapter import (
@@ -17,6 +16,10 @@ from jaims.adapters.openai_adapter import (
 )
 
 
+@jaimsfunctiontool(
+    description="use this function when the user wants to sum two numbers",
+    params_descriptions={"a": "the first operand", "b": "the second operand"},
+)
 def sum(a: int, b: int):
     print("----performing sum----")
     print(a, b)
@@ -24,6 +27,10 @@ def sum(a: int, b: int):
     return a + b
 
 
+@jaimsfunctiontool(
+    description="use this function when the user wants to multiply two numbers",
+    params_descriptions={"a": "the first operand", "b": "the second operand"},
+)
 def multiply(a: int, b: int):
     print("----performing multiply----")
     print(a, b)
@@ -31,12 +38,20 @@ def multiply(a: int, b: int):
     return a * b
 
 
+@jaimsfunctiontool(
+    description="use this function when the user wants to store the result of a sum",
+    params_descriptions={"result": "the result of a sum"},
+)
 def store_sum(result: int):
     print("----storing sum----")
     print(result)
     print("-------------------")
 
 
+@jaimsfunctiontool(
+    description="use this function when the user wants to store the result of a multiply",
+    params_descriptions={"result": "the result of a multiply"},
+)
 def store_multiply(result: int):
     print("----storing multiply----")
     print(result)
@@ -64,76 +79,6 @@ class FileTransactionStorage(OpenAITransactionStorageInterface):
 def main():
     stream = True
 
-    sum_func_wrapper = JAImsFunctionTool(
-        function=sum,
-        function_tool_descriptor=JAImsFunctionToolDescriptor(
-            name="sum",
-            description="use this function when the user wants to sum two numbers",
-            params_descriptors=[
-                JAImsParamDescriptor(
-                    name="a",
-                    description="first operand",
-                    json_type=JAImsJsonSchemaType.NUMBER,
-                ),
-                JAImsParamDescriptor(
-                    name="b",
-                    description="second operand",
-                    json_type=JAImsJsonSchemaType.NUMBER,
-                ),
-            ],
-        ),
-    )
-
-    multiply_func_wrapper = JAImsFunctionTool(
-        function=multiply,
-        function_tool_descriptor=JAImsFunctionToolDescriptor(
-            name="multiply",
-            description="use this function when the user wants to multiply two numbers",
-            params_descriptors=[
-                JAImsParamDescriptor(
-                    name="a",
-                    description="first operand",
-                    json_type=JAImsJsonSchemaType.NUMBER,
-                ),
-                JAImsParamDescriptor(
-                    name="b",
-                    description="second operand",
-                    json_type=JAImsJsonSchemaType.NUMBER,
-                ),
-            ],
-        ),
-    )
-
-    result_func_wrapper = JAImsFunctionTool(
-        function=store_sum,
-        function_tool_descriptor=JAImsFunctionToolDescriptor(
-            name="store_sum_result",
-            description="this function MUST be called every time after a sum function is called to store its result.",
-            params_descriptors=[
-                JAImsParamDescriptor(
-                    name="result",
-                    description="the result of a sum",
-                    json_type=JAImsJsonSchemaType.NUMBER,
-                ),
-            ],
-        ),
-    )
-
-    result_multiply_func_wrapper = JAImsFunctionTool(
-        function=store_multiply,
-        function_tool_descriptor=JAImsFunctionToolDescriptor(
-            name="store_multiply_result",
-            description="this function MUST be called every time after a multiply function is called to store its result.",
-            params_descriptors=[
-                JAImsParamDescriptor(
-                    name="result",
-                    description="the result of a multiply",
-                    json_type=JAImsJsonSchemaType.NUMBER,
-                ),
-            ],
-        ),
-    )
-
     agent = create_jaims_openai(
         kwargs=JAImsOpenaiKWArgs(
             model="gpt-4-turbo-2024-04-09",
@@ -148,12 +93,7 @@ def main():
                 JAImsMessage.assistant_message(text="How can I help you today?"),
             ]
         ),
-        tools=[
-            sum_func_wrapper,
-            multiply_func_wrapper,
-            result_func_wrapper,
-            result_multiply_func_wrapper,
-        ],
+        tools=[sum, multiply, store_sum, store_multiply],
     )
 
     print("Hello, I am JAIms, your personal assistant.")

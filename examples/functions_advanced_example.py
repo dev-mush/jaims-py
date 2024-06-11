@@ -1,69 +1,31 @@
+from typing import List, Optional
 from jaims import (
     JAImsAgent,
-    JAImsFunctionTool,
-    JAImsParamDescriptor,
-    JAImsFunctionToolDescriptor,
-    JAImsJsonSchemaType,
     JAImsDefaultHistoryManager,
     JAImsMessage,
+    BaseModel,
+    Field,
+    jaimsfunctiontool,
 )
 
 
-def store_people_info(people_data: list):
-    print("----passed items----")
-    print(people_data)
+class PersonRecord(BaseModel):
+    name: str = Field(description="the name of the person received")
+    age: str = Field(description="the age of the person received")
+    interests: Optional[List] = Field(
+        description="the interests like hobbies and what the person likes to do",
+    )
+
+
+@jaimsfunctiontool(
+    description="use this tool to store person records, if many are available, pass multiple records at once, always ask age first when missing",
+    params_descriptions={"person_records": "the records of the people to store"},
+)
+def store_person_records(person_records: List[PersonRecord]):
+    print("\n----passed items----")
+    print(person_records)
     print("---------------------")
-    return "people info correctly stored"
-
-
-func_tool_wrapper = JAImsFunctionTool(
-    function=store_people_info,
-    function_tool_descriptor=JAImsFunctionToolDescriptor(
-        name="store_people_info",
-        description="this function MUST be used to store the result of the extraction into the database.",
-        params_descriptors=[
-            JAImsParamDescriptor(
-                name="people_data",
-                description="list of people data to store",
-                json_type=JAImsJsonSchemaType.ARRAY,
-                array_type_descriptors=[
-                    JAImsParamDescriptor(
-                        name="person_record",
-                        description="json object that holds information about an extracted name and its description",
-                        json_type=JAImsJsonSchemaType.OBJECT,
-                        attributes_params_descriptors=[
-                            JAImsParamDescriptor(
-                                name="name",
-                                description="the name of the person received",
-                                json_type=JAImsJsonSchemaType.STRING,
-                                required=True,
-                            ),
-                            JAImsParamDescriptor(
-                                name="age",
-                                description="the age of the person received",
-                                json_type=JAImsJsonSchemaType.STRING,
-                                required=True,
-                            ),
-                            JAImsParamDescriptor(
-                                name="interests",
-                                description="the interests like hobbies and what the person likes to do",
-                                json_type=JAImsJsonSchemaType.ARRAY,
-                                required=False,
-                                array_type_descriptors=[
-                                    JAImsParamDescriptor(
-                                        name="interest",
-                                        description="the interest of the person",
-                                        json_type=JAImsJsonSchemaType.STRING,
-                                    ),
-                                ],
-                            ),
-                        ],
-                    ),
-                ],
-            )
-        ],
-    ),
-)
+    return "records stored correctly"
 
 
 system_prompt = """
@@ -84,7 +46,7 @@ def main():
         history_manager=JAImsDefaultHistoryManager(
             leading_prompts=[JAImsMessage.system_message(system_prompt)]
         ),
-        tools=[func_tool_wrapper],
+        tools=[store_person_records],
     )
 
     print("Hello, I am JAIms, your personal assistant.")

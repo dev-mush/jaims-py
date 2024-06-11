@@ -4,6 +4,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 from PIL import Image
+from pydantic import BaseModel, Field
 
 
 # -------------------------
@@ -129,188 +130,14 @@ class JAImsStreamingMessage:
         self.textDelta = textDelta
 
 
-# ------------------------------------------
-# Params, tool and function handling classes
-# ------------------------------------------
-
-
-class JAImsJsonSchemaType(Enum):
-    STRING = "string"
-    NUMBER = "number"
-    OBJECT = "object"
-    ARRAY = "array"
-    BOOLEAN = "boolean"
-    NULL = "null"
-
-
-class JAImsParamDescriptor:
-    """
-    Describes a parameter to be used in the OPENAI API.
-
-    Attributes
-    ----------
-        name : str
-            the parameter name
-        description : str
-            the parameter description
-        json_type : JsonType:
-            the parameter json type
-        attributes_params_descriptors : list of JAImsParamDescriptor
-            the list of parameters descriptors for the attributes of the parameter
-            in case the parameter is an object, defualts to None
-        array_type_descriptors : list of JAImsParamDescriptor
-            the parameter descriptors for the array type in case the parameter is an array, defaults to None
-        enum_values:
-            the list of values in case the parameter is an enum, defaults to None
-        required : bool
-            whether the parameter is required or not, defaults to True
-
-    """
-
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        json_type: JAImsJsonSchemaType,
-        attributes_params_descriptors: Optional[List[JAImsParamDescriptor]] = None,
-        array_type_descriptors: Optional[List[JAImsParamDescriptor]] = None,
-        array_type_any_valid: bool = True,
-        enum_values: Optional[List[Any]] = None,
-        required: bool = True,
-    ):
-        self.name = name
-        self.description = description
-        self.json_type = json_type
-        self.attributes_params_descriptors = attributes_params_descriptors
-        self.array_type_descriptors = array_type_descriptors
-        self.array_type_any_valid = array_type_any_valid
-        self.enum_values = enum_values
-        self.required = required
-
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> JAImsParamDescriptor:
-        """
-        Creates a JAImsParamDescriptor instance from a dictionary.
-
-        Allowed keys in the dictionary:
-            - name (string): the parameter name
-            - description (string): the parameter description
-            - type (string): the parameter json type, must be one of ["string", "number", "object", "array", "boolean", "null"]
-            - attributes (optional list): the list of parameters descriptors for the attributes of the parameter
-            - array_types (optional list): the parameter descriptors for the array type in case the parameter is an array
-            - array_type_any_valid (bool): whether the array type can be any of the types in the array_type_descriptors
-            - enum_values (optional list): the list of values in case the parameter is an enum, either string or number
-            - required (optional bool): whether the parameter is required or not
-
-        Args:
-            data: the dictionary with the data to create the instance
-
-        Returns:
-            a JAImsParamDescriptor instance
-        """
-        return JAImsParamDescriptor(
-            name=data["name"],
-            description=data["description"],
-            json_type=JAImsJsonSchemaType(data["type"]),
-            attributes_params_descriptors=(
-                [JAImsParamDescriptor.from_dict(attr) for attr in data["attributes"]]
-                if data.get("attributes")
-                else None
-            ),
-            array_type_descriptors=(
-                [JAImsParamDescriptor.from_dict(attr) for attr in data["array_types"]]
-                if data.get("array_types")
-                else None
-            ),
-            array_type_any_valid=data.get("array_type_any_valid", True),
-            enum_values=data.get("enum"),
-            required=data.get("required", True),
-        )
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Returns a dictionary representation of the parameter descriptor.
-        """
-        descriptor = {
-            "name": self.name,
-            "description": self.description,
-            "type": self.json_type.value,
-            "required": self.required,
-        }
-
-        if self.attributes_params_descriptors:
-            descriptor["attributes"] = [
-                attr.to_dict() for attr in self.attributes_params_descriptors
-            ]
-
-        if self.array_type_descriptors:
-            descriptor["array_types"] = [
-                attr.to_dict() for attr in self.array_type_descriptors
-            ]
-
-        if self.array_type_any_valid:
-            descriptor["array_type_any_valid"] = self.array_type_any_valid
-
-        if self.enum_values:
-            descriptor["enum"] = self.enum_values
-
-        return descriptor
-
-    def __eq__(self, value: object) -> bool:
-        if not isinstance(value, JAImsParamDescriptor):
-            return False
-
-        return (
-            self.name == value.name
-            and self.description == value.description
-            and self.json_type == value.json_type
-            and (self.attributes_params_descriptors or [])
-            == (value.attributes_params_descriptors or [])
-            and (self.array_type_descriptors or [])
-            == (value.array_type_descriptors or [])
-            and self.array_type_any_valid == value.array_type_any_valid
-            and (self.enum_values or []) == (value.enum_values or [])
-            and self.required == value.required
-        )
-
-    def get_json_schema(self) -> Dict[str, Any]:
-        """
-        Returns the jsonapi schema for the parameter.
-        """
-        schema: dict[str, Any] = {
-            "type": self.json_type.value,
-            "description": self.description,
-        }
-
-        if (
-            self.json_type == JAImsJsonSchemaType.OBJECT
-            and self.attributes_params_descriptors
-        ):
-            schema["properties"] = {}
-            schema["required"] = []
-            for param in self.attributes_params_descriptors:
-                schema["properties"][param.name] = param.get_json_schema()
-                if param.required:
-                    schema["required"].append(param.name)
-
-        if self.json_type == JAImsJsonSchemaType.ARRAY and self.array_type_descriptors:
-            items_schema = [
-                desc.get_json_schema() for desc in self.array_type_descriptors
-            ]
-            if self.array_type_any_valid:
-                schema["items"] = {"anyOf": items_schema}
-            else:
-                schema["items"] = [items_schema]
-
-        if self.enum_values:
-            schema["enum"] = self.enum_values
-
-        return schema
+# -----------------------------------
+# Tools and function handling classes
+# -----------------------------------
 
 
 class JAImsFunctionToolDescriptor:
     """
-    Describes a tool to be used in the OPENAI API. Supports only function tool for now.
+    Describes a function tool.
 
     Attributes
     ----------
@@ -318,80 +145,26 @@ class JAImsFunctionToolDescriptor:
             the tool name
         description : str
             the tool description
-        params_descriptors: List[JAImsParamDescriptor]
-            the list of parameters descriptors
+        params: a BaseModel type
+            the tool parameters
     """
 
     def __init__(
         self,
         name: str,
         description: str,
-        params_descriptors: List[JAImsParamDescriptor],
+        params: Optional[type[BaseModel]],
     ):
         self.name = name
         self.description = description
-        self.params_descriptors = params_descriptors
+        self.params = params
 
-    def __eq__(self, value: object) -> bool:
-        if not isinstance(value, JAImsFunctionToolDescriptor):
-            return False
+    def json_schema(self) -> Dict[str, Any]:
 
-        return (
-            self.name == value.name
-            and self.description == value.description
-            and self.params_descriptors == value.params_descriptors
-        )
+        if not self.params:
+            return {}
 
-    @staticmethod
-    def from_dict(data: Dict[str, Any]) -> JAImsFunctionToolDescriptor:
-        """
-        Creates a JAImsFunctionToolDescriptor instance from a dictionary.
-
-        Allowed keys in the dictionary:
-            - name (string): the tool name
-            - description (string): the tool description
-            - params_descriptors (list): the list of parameters descriptors
-
-        Args:
-            data: the dictionary with the data to create the instance
-
-        Returns:
-            a JAImsFunctionToolDescriptor instance
-        """
-        return JAImsFunctionToolDescriptor(
-            name=data["name"],
-            description=data["description"],
-            params_descriptors=[
-                JAImsParamDescriptor.from_dict(param) for param in data["params"]
-            ],
-        )
-
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Returns a dictionary representation of the tool descriptor.
-        """
-        return {
-            "name": self.name,
-            "description": self.description,
-            "params": [param.to_dict() for param in self.params_descriptors],
-        }
-
-    def get_json_schema(self) -> Dict[str, Any]:
-        """
-        Returns the jsonapi schema for function.
-        """
-        schema = {
-            "type": "object",
-            "properties": {},
-            "required": [],
-        }
-
-        for param in self.params_descriptors:
-            schema["properties"][param.name] = param.get_json_schema()
-            if param.required:
-                schema["required"].append(param.name)
-
-        return schema
+        return self.params.model_json_schema()
 
 
 class JAImsFunctionTool:
@@ -406,40 +179,35 @@ class JAImsFunctionTool:
         function : Callable[..., Any]
             The function to be called when the tool is invoked, defaults to None.
             When None, the tool call pass None to the agent as a result.
-        to_openai_function_tool : JAImsFunctionToolDescriptor
+        descriptor : JAImsFunctionToolDescriptor
             The tool descriptor, contains the markup information that will be used to be passed
             as a tool invocation dictionary to the LLM.
-
-    Methods
-    -------
-        call(params: Dict[str, Any]) -> Any
-            Calls the wrapped function with the given parameters, if the function is not None.
-            Returns None otherwise.
     """
 
     def __init__(
         self,
-        function_tool_descriptor: JAImsFunctionToolDescriptor,
+        descriptor: JAImsFunctionToolDescriptor,
         function: Optional[Callable[..., Any]] = None,
     ):
         self.function = function
-        self.function_tool = function_tool_descriptor
+        self.descriptor = descriptor
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self.function(*args, **kwds) if self.function else None
+        if not self.descriptor.params:
+            return
 
-    def call(self, params: Optional[Dict[str, Any]]) -> Any:
+        try:
+            parsed_args = self.descriptor.params.model_validate(*args)
+        except Exception as e:
+            raise ValueError(f"Invalid parameters for tool {self.descriptor.name}: {e}")
+
+        return self.function(parsed_args) if self.function else None
+
+    def call(self, *args: Any, **kwds: Any) -> Any:
         """
-        Calls the wrapped function with the passed parameters if the function is not None.
-        Returns None otherwise.
-
-        Parameters
-        ----------
-            params : dict
-                the parameters passed to the wrapped function
+        Calls the function with the provided arguments.
         """
-
-        return self.function(**params) if params and self.function else None
+        return self(*args, **kwds)
 
 
 # -----------------------------------

@@ -27,7 +27,7 @@ class JAImsDefaultToolManager(JAImsToolManager):
         for fc in tool_calls:
             function_name = fc.tool_name
             tool_wrapper = next(
-                (f for f in tools if f.function_tool.name == function_name),
+                (f for f in tools if f.descriptor.name == function_name),
                 None,
             )
             if not tool_wrapper:
