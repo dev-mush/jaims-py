@@ -2,10 +2,10 @@ from __future__ import annotations
 
 # Enum class over all Json Types
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from PIL import Image
 from pydantic import BaseModel, Field
-
+import functools
 
 # -------------------------
 # LLM Messaging Abstraction
@@ -187,27 +187,38 @@ class JAImsFunctionTool:
     def __init__(
         self,
         descriptor: JAImsFunctionToolDescriptor,
-        function: Optional[Callable[..., Any]] = None,
+        function: Optional[Callable] = None,
     ):
         self.function = function
         self.descriptor = descriptor
+        if function:
+            functools.update_wrapper(self, function)
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        if not self.descriptor.params:
-            return
+    def __call__(self, *args, **kwargs):
+        if not self.function:
+            return None
+        return self.function(*args, **kwargs)
 
-        try:
-            parsed_args = self.descriptor.params.model_validate(*args)
-        except Exception as e:
-            raise ValueError(f"Invalid parameters for tool {self.descriptor.name}: {e}")
+    def __get__(self, instance, owner):
+        if instance is None:
+            return self
+        else:
+            # Create a bound method manually if accessed through an instance
+            return functools.partial(self.__call__, instance)
 
-        return self.function(parsed_args) if self.function else None
-
-    def call(self, *args: Any, **kwds: Any) -> Any:
+    def call(self, data: dict) -> Any:
         """
         Calls the function with the provided arguments.
         """
-        return self(*args, **kwds)
+        if not self.descriptor.params or self.function is None:
+            return
+
+        try:
+            parsed_args = self.descriptor.params.model_validate(data)
+        except Exception as e:
+            raise ValueError(f"Invalid parameters for tool {self.descriptor.name}: {e}")
+
+        return self(parsed_args)
 
 
 # -----------------------------------

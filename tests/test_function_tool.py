@@ -24,7 +24,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
 
         tool = JAImsFunctionTool(descriptor=tool_descriptor, function=mock_function)
 
-        tool({"mock_str": "mock", "mock_num": 1})
+        tool.call({"mock_str": "mock", "mock_num": 1})
 
         self.assertTrue(result)
 
@@ -47,9 +47,38 @@ class TestJAImsFunctionTool(unittest.TestCase):
 
         tool = JAImsFunctionTool(descriptor=tool_descriptor, function=mock_function)
 
-        tool({"mock_str": "mock", "mock_num": 1})
+        tool.call({"mock_str": "mock", "mock_num": 1})
 
         self.assertTrue(result)
+
+    def test_function_tool_calls_instance_methods(self):
+
+        class MockClass(BaseModel):
+            mock_str: str = Field(description="Mock string")
+            mock_num: int = Field(description="Mock number")
+
+        tool_descriptor = JAImsFunctionToolDescriptor(
+            name="mock_tool", description="Mock tool", params=MockClass
+        )
+
+        class MockClassInstance:
+
+            def __init__(self):
+                self.result = False
+
+            def mock_method(self, mock_param: MockClass):
+                if mock_param.mock_str == "mock" and mock_param.mock_num == 1:
+                    self.result = True
+
+        instance = MockClassInstance()
+
+        tool = JAImsFunctionTool(
+            descriptor=tool_descriptor, function=instance.mock_method
+        )
+
+        tool.call({"mock_str": "mock", "mock_num": 1})
+
+        self.assertTrue(instance.result)
 
 
 if __name__ == "__main__":
