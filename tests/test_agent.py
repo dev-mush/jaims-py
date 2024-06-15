@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 from jaims.agent import JAImsAgent
 from jaims.entities import (
     JAImsMessage,
@@ -83,8 +83,14 @@ class TestJAImsAgent(unittest.TestCase):
         self.llm_interface.call.assert_called_once_with(
             mock_history_return, self.mock_tools
         )
-        self.history_manager.add_messages.assert_called_once_with([self.mock_message])
-        self.history_manager.get_messages.assert_called_once()
+
+        self.history_manager.assert_has_calls(
+            [
+                call.add_messages([self.mock_message]),
+                call.get_messages(),
+                call.add_messages([self.mock_message_response]),
+            ]
+        )
 
     def test_run_passes_tool_calls_to_tool_manager_when_receiving_tool_calls(self):
         first_message_mock = MagicMock()
@@ -105,7 +111,7 @@ class TestJAImsAgent(unittest.TestCase):
         self.assertEqual(response, "World")
 
         self.tool_manager.handle_tool_calls.assert_called_once_with(
-            self.mock_message_response_tool_calls.tool_calls, self.mock_tools
+            sut, self.mock_message_response_tool_calls.tool_calls, self.mock_tools
         )
 
 

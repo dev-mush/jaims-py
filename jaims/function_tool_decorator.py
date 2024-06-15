@@ -1,10 +1,8 @@
-from enum import Enum
 from jaims.entities import (
     JAImsFunctionTool,
     JAImsFunctionToolDescriptor,
 )
-from typing import Any, List, Optional, Dict, Type, Union, get_args
-from functools import wraps
+from typing import Any, Optional, Dict
 import inspect
 from pydantic import BaseModel, Field, create_model
 
@@ -19,9 +17,8 @@ def jaimsfunctiontool(
         tool_name = name if name else func.__name__
         tool_description = description or ""
         params_models = {}
-
         sig = inspect.signature(func)
-        is_method = "self" in sig.parameters or "cls" in sig.parameters
+        has_base_model = False
 
         for param_name, param in sig.parameters.items():
 
@@ -44,14 +41,18 @@ def jaimsfunctiontool(
                     Field(description=param_description),
                 )
             else:
+                # check if the param is a BaseModel or a subclass of it
+                if isinstance(param.annotation, type) and issubclass(
+                    param.annotation, BaseModel
+                ):
+                    has_base_model = True
+
                 params_models[param_name] = (
                     param.annotation,
                     Field(default=param.default, description=param_description),
                 )
 
-        if len(params_models) == 1 and issubclass(
-            list(params_models.values())[0][0], BaseModel
-        ):
+        if len(params_models) == 1 and has_base_model:
             output_model = list(params_models.values())[0][0]
         else:
             output_model = create_model(return_value_object_name, **params_models)
@@ -60,31 +61,17 @@ def jaimsfunctiontool(
             name=tool_name, description=tool_description, params=output_model
         )
 
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            if is_method:
-                formatted_model = output_model.model_validate(args[1])
-                kwargs.update(
-                    {
-                        name: getattr(formatted_model, name)
-                        for name in params_models.keys()
-                    }
-                )
-                self_instance = args[0]
-                return func(self_instance, **kwargs)
-            else:
-                formatted_model = output_model.model_validate(args[0])
-                kwargs.update(
-                    {
-                        name: getattr(formatted_model, name)
-                        for name in params_models.keys()
-                    }
-                )
+        def formatter(data: Dict[str, Any]):
+            formatted_model = output_model.model_validate(data)
+            kwargs = {
+                name: getattr(formatted_model, name) for name in params_models.keys()
+            }
 
-                return func(**kwargs)
+            return (), kwargs
 
         return JAImsFunctionTool(
-            function=wrapper,
+            function=func,
+            formatter=formatter,
             descriptor=descriptor,
         )
 

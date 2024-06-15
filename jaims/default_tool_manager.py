@@ -33,7 +33,8 @@ class JAImsDefaultToolManager(JAImsToolManager):
             if not tool_wrapper:
                 raise JAImsUnexpectedFunctionCall(function_name)
 
-            fc_result = tool_wrapper.call(fc.tool_args)
+            args = fc.tool_args or {}
+            fc_result = tool_wrapper.call_raw(**args)
             results.append(
                 JAImsMessage.tool_response_message(
                     tool_call_id=fc.id,

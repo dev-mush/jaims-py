@@ -33,7 +33,29 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
 
         self.assertEqual(add_numbers.descriptor.name, "add_numbers")
 
-    def test_wrapped_function_is_callable(self):
+    def test_decorated_function_gets_called_by_wrapper(self):
+
+        class MockClass(BaseModel):
+            a: int = Field(description="Mock a")
+            b: int = Field(description="Mock b")
+
+        @jaimsfunctiontool(description="mock wrapped function")
+        def mock_wrapped_function(
+            input: str,
+            number: int,
+            flag: bool,
+            items: List[str],
+            mock_class: MockClass,
+        ) -> str:
+            items_str = " ".join(items)
+            return f"Hello {input} {number} {flag} {items_str} {mock_class.a} {mock_class.b}"
+
+        result = mock_wrapped_function(
+            "Mondo", 42, True, ["a", "b"], MockClass(a=11, b=22)
+        )
+        self.assertEqual(result, "Hello Mondo 42 True a b 11 22")
+
+    def test_decorated_function_gets_called_with_formatter(self):
 
         class MockClass(BaseModel):
             a: int = Field(description="Mock a")
@@ -58,7 +80,7 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
             "mock_class": {"a": 11, "b": 22},
         }
 
-        result = mock_wrapped_function(payload)
+        result = mock_wrapped_function.call_raw(**payload)
         self.assertEqual(result, "Hello Mondo 42 True a b 11 22")
 
     def test_decorated_tool_descriptor_param_type_is_base_model_when_passed_base_model_only(
@@ -130,7 +152,7 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
 
         mock_instance = MockClassMethods()
         payload = {"param_one": "Hello", "param_two": {"a": 42}}
-        result = mock_instance.mock_wrapped_function(payload)
+        result = mock_instance.mock_wrapped_function.call_raw(**payload)
         self.assertTrue(mock_instance.called)
         self.assertEqual(result, "Hello 42")
 
@@ -144,7 +166,7 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
             return f"{param_one} {param_two.a}"
 
         payload = {"param_one": "Hello", "param_two": {"a": 42}}
-        result = mock_wrapped_function(payload)
+        result = mock_wrapped_function.call_raw(**payload)
         self.assertEqual(result, "Hello 42")
 
 

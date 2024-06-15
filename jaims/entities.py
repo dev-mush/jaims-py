@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from PIL import Image
 from pydantic import BaseModel, Field
 import functools
+import types
 
 # -------------------------
 # LLM Messaging Abstraction
@@ -168,57 +169,62 @@ class JAImsFunctionToolDescriptor:
 
 
 class JAImsFunctionTool:
-    """
-    Wraps a function tool used by the LLM along with a function to be called locally when
-    the tool is invoked by the LLM.
-    You may subclass this class to implement your own function wrapper behavior by overriding the call method.
-
-
-    Attributes
-    ----------
-        function : Callable[..., Any]
-            The function to be called when the tool is invoked, defaults to None.
-            When None, the tool call pass None to the agent as a result.
-        descriptor : JAImsFunctionToolDescriptor
-            The tool descriptor, contains the markup information that will be used to be passed
-            as a tool invocation dictionary to the LLM.
-    """
 
     def __init__(
         self,
         descriptor: JAImsFunctionToolDescriptor,
-        function: Optional[Callable] = None,
+        function: Callable,
+        formatter: Optional[Callable[[Dict], Tuple[tuple, dict]]] = None,
     ):
         self.function = function
         self.descriptor = descriptor
-        if function:
-            functools.update_wrapper(self, function)
+        self.formatter = formatter or self.__default_formatter
+        self.__bound_instance = None
+        functools.update_wrapper(self, function)
 
     def __call__(self, *args, **kwargs):
-        if not self.function:
-            return None
+
+        if self.__bound_instance:
+            return self.function(self.__bound_instance, *args, **kwargs)
+
         return self.function(*args, **kwargs)
 
     def __get__(self, instance, owner):
-        if instance is None:
-            return self
-        else:
-            # Create a bound method manually if accessed through an instance
-            return functools.partial(self.__call__, instance)
+        self.__bound_instance = instance
+        return self
 
-    def call(self, data: dict) -> Any:
-        """
-        Calls the function with the provided arguments.
-        """
+    def __default_formatter(self, data: Dict) -> Tuple[tuple, dict]:
         if not self.descriptor.params or self.function is None:
-            return
+            return ((), data)
 
         try:
             parsed_args = self.descriptor.params.model_validate(data)
         except Exception as e:
             raise ValueError(f"Invalid parameters for tool {self.descriptor.name}: {e}")
 
-        return self(parsed_args)
+        return (parsed_args,), {}
+
+    def call_raw(self, **kwargs) -> Any:
+        """
+        Calls the wrapped function parsing the raw data (received from the LLM) into the expected parameters defined in the descriptor.
+
+        Args:
+            data: dict
+                the raw data received from the LLM
+
+        Returns:
+            Any
+                the result of the function call
+
+        Raises:
+            ValueError: if the data does not match the expected parameters defined in the descriptor
+        """
+        if not self.function:
+            return None
+
+        args, kwargs = self.formatter(kwargs)
+
+        return self(*args, **kwargs)
 
 
 # -----------------------------------
