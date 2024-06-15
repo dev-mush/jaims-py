@@ -49,7 +49,7 @@ class TestJAImsAgent(unittest.TestCase):
         )
 
         response = sut.run()
-        self.llm_interface.call.assert_called_once_with([], [])
+        self.llm_interface.call.assert_called_once_with([], [], tool_constraints=None)
         self.assertEqual(response, "World")
 
     def test_run_messages_and_tools(self):
@@ -60,9 +60,9 @@ class TestJAImsAgent(unittest.TestCase):
             tools=self.mock_tools,
         )
 
-        response = sut.run([self.mock_message])
+        response = sut.run([self.mock_message], tool_constraints=["hello"])
         self.llm_interface.call.assert_called_once_with(
-            [self.mock_message], self.mock_tools
+            [self.mock_message], self.mock_tools, tool_constraints=["hello"]
         )
         self.assertEqual(response, "World")
 
@@ -81,7 +81,7 @@ class TestJAImsAgent(unittest.TestCase):
         self.assertEqual(response, "World")
 
         self.llm_interface.call.assert_called_once_with(
-            mock_history_return, self.mock_tools
+            mock_history_return, self.mock_tools, tool_constraints=None
         )
 
         self.history_manager.assert_has_calls(
@@ -112,6 +112,28 @@ class TestJAImsAgent(unittest.TestCase):
 
         self.tool_manager.handle_tool_calls.assert_called_once_with(
             sut, self.mock_message_response_tool_calls.tool_calls, self.mock_tools
+        )
+
+    def test_tools_are_overridden_when_passed_trough_run_method(self):
+        self.llm_interface.call.return_value = self.mock_message_response_tool_calls
+        self.tool_manager.handle_tool_calls.return_value = []
+
+        sut = JAImsAgent(
+            llm_interface=self.llm_interface,
+            tool_manager=self.tool_manager,
+            tools=self.mock_tools,
+        )
+
+        override_tools = MagicMock()
+
+        response = sut.run([self.mock_message], [override_tools])
+
+        self.llm_interface.call.assert_called_once_with(
+            [self.mock_message], [override_tools], tool_constraints=None
+        )
+
+        self.tool_manager.handle_tool_calls.assert_called_once_with(
+            sut, self.mock_message_response_tool_calls.tool_calls, [override_tools]
         )
 
 

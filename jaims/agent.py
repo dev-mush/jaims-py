@@ -22,10 +22,8 @@ from jaims.entities import (
 # TODOS:
 # High Priority
 # TODO: Refactor all docstrings and docs, check imports and remove unused imports
-# TODO: Implement better tool constraints
 
 # Mid Priority
-# TODO: Implement a method to pass a function directly instead of the jaims descriptors
 # TODO: Implement Tests
 
 # Low Priority
@@ -55,13 +53,13 @@ class JAImsAgent:
         history_manager: Optional[JAImsHistoryManager] = None,
         tool_manager: Optional[JAImsToolManager] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
-        tool_constraints: Optional[List[str]] = None,
+        max_consecutive_tool_calls: int = 10,
     ):
         self.llm_interface = llm_interface
         self.tool_manager = tool_manager or JAImsDefaultToolManager()
         self.tools = tools or []
-        self.tool_constraints = tool_constraints or []
         self.history_manager = history_manager
+        self.max_consecutive_tool_calls = max_consecutive_tool_calls
         self.__session_iteration = -1
         self.__session_messages = []
 
@@ -75,7 +73,6 @@ class JAImsAgent:
         history_manager: Optional[JAImsHistoryManager] = None,
         tool_manager: Optional[JAImsToolManager] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
-        tool_constraints: Optional[List[str]] = None,
     ) -> JAImsAgent:
 
         # assert provider in ["openai", "google"], "Provider must be either 'openai' or 'google'"
@@ -95,7 +92,6 @@ class JAImsAgent:
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
-                tool_constraints=tool_constraints,
             )
         elif provider == "google":
             from .factories import google_factory
@@ -108,16 +104,13 @@ class JAImsAgent:
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
-                tool_constraints=tool_constraints,
             )
         else:
             raise ValueError("Provider is not supported.")
 
-    def __update_session(
-        self, session_messages: List[JAImsMessage], max_iterations: int
-    ):
+    def __update_session(self, session_messages: List[JAImsMessage]):
         self.__session_iteration += 1
-        if self.__session_iteration > max_iterations:
+        if self.__session_iteration > self.max_consecutive_tool_calls:
             raise JAImsMaxConsecutiveFunctionCallsExceeded(self.__session_iteration)
 
         if self.history_manager:
@@ -134,11 +127,13 @@ class JAImsAgent:
         self.__session_iteration = -1
         self.__session_messages = []
 
-    def __get_tool_results(self, message: JAImsMessage) -> List[JAImsMessage]:
+    def __get_tool_results(
+        self, message: JAImsMessage, tools: List[JAImsFunctionTool]
+    ) -> List[JAImsMessage]:
         tool_results = []
         if message and message.tool_calls:
             tool_call_results = self.tool_manager.handle_tool_calls(
-                self, message.tool_calls, self.tools
+                self, message.tool_calls, tools
             )
             tool_results.extend(tool_call_results)
 
@@ -147,26 +142,36 @@ class JAImsAgent:
     def run(
         self,
         messages: Optional[List[JAImsMessage]] = None,
-        max_iterations: int = 10,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
     ) -> Optional[str]:
         """
         Runs the agent with the given messages and tools.
 
         Args:
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            max_iterations (int): The maximum number of iterations. Defaults to 10. Pass this to constrain the maximum number of function calls.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Returns:
             Optional[str]: The response text, or None if there is no response.
         """
 
-        self.__update_session(messages or [], max_iterations)
+        self.__update_session(messages or [])
 
-        response_message = self.llm_interface.call(self.__session_messages, self.tools)
+        run_tools = tools or self.tools
 
-        tool_results = self.__get_tool_results(response_message)
-        if tool_results and not self.tool_constraints:
-            return self.run([response_message] + tool_results, max_iterations)
+        response_message = self.llm_interface.call(
+            self.__session_messages, run_tools, tool_constraints=tool_constraints
+        )
+
+        tool_results = self.__get_tool_results(response_message, run_tools)
+        if tool_results and not tool_constraints:
+            return self.run(
+                [response_message] + tool_results,
+                run_tools,
+                tool_constraints=tool_constraints,
+            )
 
         self.__end_session([response_message] + tool_results)
         return response_message.get_text() or ""
@@ -174,23 +179,27 @@ class JAImsAgent:
     def run_stream(
         self,
         messages: Optional[List[JAImsMessage]] = None,
-        max_iterations: int = 10,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
     ) -> Generator[str, None, None]:
         """
         Runs the agent in streaming mode with the given messages and tools.
 
         Args:
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            max_iterations (int): The maximum number of iterations. Defaults to 10. Pass this to constrain the maximum number of function calls.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Yields:
             str: The text delta of each response message.
         """
 
-        self.__update_session(messages or [], max_iterations)
+        self.__update_session(messages or [])
+
+        run_tools = tools or self.tools
 
         streaming_response = self.llm_interface.call_streaming(
-            self.__session_messages, self.tools
+            self.__session_messages, run_tools, tool_constraints=tool_constraints
         )
 
         response_message = None
@@ -201,10 +210,12 @@ class JAImsAgent:
         if not response_message:
             return
 
-        tool_results = self.__get_tool_results(response_message)
-        if tool_results and not self.tool_constraints:
+        tool_results = self.__get_tool_results(response_message, run_tools)
+        if tool_results and not tool_constraints:
             yield from self.run_stream(
-                [response_message] + tool_results, max_iterations
+                [response_message] + tool_results,
+                run_tools,
+                tool_constraints=tool_constraints,
             )
             return
 

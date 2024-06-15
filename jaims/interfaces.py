@@ -5,7 +5,7 @@ if TYPE_CHECKING:
     from .agent import JAImsAgent
 
 from abc import ABC, abstractmethod
-from typing import List, Generator
+from typing import List, Generator, Optional
 
 
 from jaims.entities import (
@@ -19,13 +19,19 @@ from jaims.entities import (
 class JAImsLLMInterface(ABC):
     @abstractmethod
     def call(
-        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+        self,
+        messages: List[JAImsMessage],
+        tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
         raise NotImplementedError
 
     @abstractmethod
     def call_streaming(
-        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+        self,
+        messages: List[JAImsMessage],
+        tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
         raise NotImplementedError
 

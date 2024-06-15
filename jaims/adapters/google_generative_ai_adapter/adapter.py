@@ -9,7 +9,6 @@ from ...entities import (
     JAImsStreamingMessage,
     JAImsOptions,
 )
-from ...agent import JAImsAgent
 from ..shared.image_utilities import image_to_bytes
 from ..shared.exponential_backoff_operation import (
     call_with_exponential_backoff,
@@ -30,7 +29,6 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
     def __init__(
         self,
         model: str,
-        tool_config: Optional[content_types.ToolConfigType] = None,
         generation_config: Optional[generation_types.GenerationConfigType] = None,
         options: Optional[JAImsOptions] = None,
         api_key: Optional[str] = None,
@@ -41,20 +39,27 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
 
         self.model = model
         self.generation_config = generation_config
-        self.tool_config = tool_config
         self.options = options or JAImsOptions()
 
     def call(
-        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+        self,
+        messages: List[JAImsMessage],
+        tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
-        response = self.__get_gemini_response(messages, tools)
+        response = self.__get_gemini_response(messages, tools, tool_constraints)
         assert isinstance(response, generation_types.GenerateContentResponse)
         return self.__gemini_to_jaims_message(response)
 
     def call_streaming(
-        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+        self,
+        messages: List[JAImsMessage],
+        tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
-        response = self.__get_gemini_response(messages, tools, stream=True)
+        response = self.__get_gemini_response(
+            messages, tools, stream=True, tool_constraints=tool_constraints
+        )
         assert isinstance(response, Iterable)
         for r in response:
             if r.candidates:
@@ -181,6 +186,7 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
         self,
         messages: List[JAImsMessage],
         tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
 
@@ -205,11 +211,22 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
             )
             gemini_tools = self.__jaims_tools_to_gemini(tools) if tools else None
 
+            tool_config = None
+            if tool_constraints and tools:
+                tool_config = content_types.to_tool_config(
+                    {
+                        "function_calling_config": {
+                            "mode": "any",
+                            "allowed_function_names": tool_constraints,
+                        }
+                    }  # type: ignore
+                )
+
             multimodal_model = GenerativeModel(
                 self.model,
                 generation_config=self.generation_config,
                 tools=gemini_tools,
-                tool_config=self.tool_config,
+                tool_config=tool_config,
                 system_instruction=system_instruction or None,
             )
 

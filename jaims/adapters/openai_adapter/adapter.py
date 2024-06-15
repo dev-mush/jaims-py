@@ -297,26 +297,48 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         self,
         messages: List[JAImsMessage],
         tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
-        openai_messages = self.__jaims_messages_to_openai(messages)
-        openai_tools = self.__jaims_tools_to_openai(tools)
 
         if isinstance(self.kwargs, JAImsOpenaiKWArgs):
             args = self.kwargs.to_dict()
         else:
             args = deepcopy(self.kwargs)
 
+        openai_messages = self.__jaims_messages_to_openai(messages)
         args["messages"] = openai_messages
-        args["tools"] = openai_tools
         args["stream"] = stream
+
+        if tools:
+            openai_tools = self.__jaims_tools_to_openai(tools)
+
+            tool_choice = "auto"
+            if tool_constraints:
+                if len(tool_constraints) > 1:
+                    raise ValueError(
+                        "Only one tool choice is allowed when using the OpenAI API."
+                    )
+
+                tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": tool_constraints[0],
+                    },
+                }
+
+            args["tools"] = openai_tools
+            args["tool_choice"] = tool_choice
 
         return args
 
     def call(
-        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+        self,
+        messages: List[JAImsMessage],
+        tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
-        args = self.__get_args(messages, tools)
+        args = self.__get_args(messages, tools, tool_constraints)
         response = self.___get_openai_response(args, self.options)
         assert isinstance(response, ChatCompletion)
         if self.transaction_storage:
@@ -328,9 +350,14 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         return self.__openai_chat_completion_to_jaims_message(response)
 
     def call_streaming(
-        self, messages: List[JAImsMessage], tools: List[JAImsFunctionTool]
+        self,
+        messages: List[JAImsMessage],
+        tools: List[JAImsFunctionTool],
+        tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
-        args = self.__get_args(messages, tools, stream=True)
+        args = self.__get_args(
+            messages, tools, stream=True, tool_constraints=tool_constraints
+        )
         response = self.___get_openai_response(args, self.options)
         assert isinstance(response, Stream)
 
