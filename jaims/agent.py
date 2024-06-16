@@ -1,5 +1,7 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from .interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
@@ -11,40 +13,30 @@ from jaims.default_tool_manager import JAImsDefaultToolManager
 
 
 from jaims.entities import (
+    JAImsFunctionToolDescriptor,
     JAImsMaxConsecutiveFunctionCallsExceeded,
     JAImsMessage,
+    JAImsStreamingMessage,
     JAImsFunctionTool,
     JAImsLLMConfig,
     JAImsOptions,
 )
 
 
-# TODOS:
-# High Priority
-# TODO: Refactor all docstrings and docs, check imports and remove unused imports
-
-# Mid Priority
-# TODO: Implement Tests
-
-# Low Priority
-# TODO: Add support for multiple completion responses
-# TODO: Adjust transaction storage for openai streaming response
-# TODO: Refactor logging entirely
-
-
 class JAImsAgent:
     """
     Base  JAIms Agent class, interacts with the JAImsLLMInterface to run messages and tools.
 
-    Args:
-        llm_interface (JAImsLLMInterface): The LLM interface used for communication.
-        history_manager (Optional[JAImsHistoryManager]): The history manager to track session messages. Defaults to None, which means no history is kept and messages are lost after run.
-        tool_manager (Optional[JAImsToolManager]): The tool manager to handle tool calls. if None, the Default tool manager is used. Implement your own interface for advanced scenarios.
-        tools (Optional[List[JAImsFunctionTool]]): The list of function tools. Defaults to None.
+    Tools can be injected in the constructor once, or passed when invoking (overriding the injected tools at every invocation).
+    Provide an history_manager if you plan to use the agent as a chat agent and want to keep track of the conversation.
+    Provide a tool_manager if you want to customize the tool handling.
 
-    Methods:
-        run: Runs the agent with the given messages and tools.
-        run_stream: Runs the agent in streaming mode with the given messages and tools.
+    Args:
+        llm_interface (JAImsLLMInterface): The LLM interface to use.
+        tools (Optional[List[JAImsFunctionTool]]): The list of tools to use. Defaults to None.
+        history_manager (Optional[JAImsHistoryManager]): The history manager to use. Defaults to None.
+        tool_manager (Optional[JAImsToolManager]): The tool manager to use. Defaults to None.
+        max_consecutive_tool_calls (int): The maximum number of consecutive tool calls allowed. Defaults to 10.
     """
 
     def __init__(
@@ -74,8 +66,31 @@ class JAImsAgent:
         tool_manager: Optional[JAImsToolManager] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
     ) -> JAImsAgent:
+        """
+        Factory method to build an agent with the specified parameters.
 
-        # assert provider in ["openai", "google"], "Provider must be either 'openai' or 'google'"
+        Currently available providers are: [openai, google]. Make sure to install the required dependencies using:
+
+        ```bash
+        pip install jaims-py[openai, google]
+        ```
+
+        The API key will be read from the default environment variables when not provided.
+
+        Args:
+            model (str): The model to use.
+            provider (Literal["openai", "google"]): The provider to use.
+            api_key (Optional[str]): The API key. Defaults to None.
+            options (Optional[JAImsOptions]): The options. Defaults to None.
+            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
+            history_manager (Optional[JAImsHistoryManager]): The history manager. Defaults to None.
+            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
+
+        Returns:
+            JAImsAgent: The agent instance.
+        """
+
         assert provider in [
             "openai",
             "google",
@@ -144,9 +159,9 @@ class JAImsAgent:
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Optional[str]:
+    ) -> JAImsMessage:
         """
-        Runs the agent with the given messages and tools.
+        Runs the agent with the given messages and tools and returns the response message.
 
         Args:
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
@@ -154,7 +169,7 @@ class JAImsAgent:
             tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Returns:
-            Optional[str]: The response text, or None if there is no response.
+            JAImsMessage: The response message.
         """
 
         self.__update_session(messages or [])
@@ -174,16 +189,131 @@ class JAImsAgent:
             )
 
         self.__end_session([response_message] + tool_results)
-        return response_message.get_text() or ""
+        return response_message
+
+    @staticmethod
+    def run_model(
+        model: str,
+        provider: Literal["openai", "google"],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tools_constraints: Optional[List[str]] = None,
+        api_key: Optional[str] = None,
+        options: Optional[JAImsOptions] = None,
+        config: Optional[JAImsLLMConfig] = None,
+        tool_manager: Optional[JAImsToolManager] = None,
+    ) -> JAImsMessage:
+        """
+        Runs the specified model with the given parameters and returns the response message.
+
+        Args:
+            model (str): The model to use.
+            provider (Literal["openai", "google"]): The provider to use.
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
+            tools_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None.
+            api_key (Optional[str]): The API key. Defaults to None.
+            options (Optional[JAImsOptions]): The options. Defaults to None.
+            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
+            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+
+        Returns:
+            JAImsMessage: The response message.
+        """
+
+        agent = JAImsAgent.build(
+            model=model,
+            provider=provider,
+            api_key=api_key,
+            options=options,
+            config=config,
+            tool_manager=tool_manager,
+            tools=tools,
+        )
+
+        return agent.run(messages=messages, tool_constraints=tools_constraints)
+
+    def run_tool(
+        self,
+        descriptor: JAImsFunctionToolDescriptor,
+        messages: Optional[List[JAImsMessage]] = None,
+    ) -> Any:
+        """
+        Runs a single tool with the given messages and returns the expected response data.
+
+        Args:
+            tool (JAImsFunctionToolDescriptor): The tool to run.
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+
+        Returns:
+            BaseModel: The expected response data defined by the tool descriptor.
+        """
+
+        response_data = None
+
+        def callback(response: BaseModel):
+            nonlocal response_data
+            response_data = response
+
+        tool = JAImsFunctionTool(
+            descriptor=descriptor,
+            function=callback,
+        )
+
+        self.run(messages, [tool], tool_constraints=[descriptor.name])
+
+        if not response_data:
+            raise ValueError(f"Tool {tool.descriptor.name} did not return any data.")
+
+        return response_data
+
+    @staticmethod
+    def run_tool_model(
+        model: str,
+        provider: Literal["openai", "google"],
+        descriptor: JAImsFunctionToolDescriptor,
+        messages: Optional[List[JAImsMessage]] = None,
+        api_key: Optional[str] = None,
+        options: Optional[JAImsOptions] = None,
+        config: Optional[JAImsLLMConfig] = None,
+        tool_manager: Optional[JAImsToolManager] = None,
+    ) -> Any:
+        """
+        Runs a single tool with the given messages and returns the expected response data.
+
+        Args:
+            model (str): The model to use.
+            provider (Literal["openai", "google"]): The provider to use.
+            descriptor (JAImsFunctionToolDescriptor): The tool to run.
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            api_key (Optional[str]): The API key. Defaults to None.
+            options (Optional[JAImsOptions]): The options. Defaults to None.
+            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
+            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+
+        Returns:
+            BaseModel: The expected response data defined by the tool descriptor.
+        """
+
+        agent = JAImsAgent.build(
+            model=model,
+            provider=provider,
+            api_key=api_key,
+            options=options,
+            config=config,
+            tool_manager=tool_manager,
+        )
+
+        return agent.run_tool(descriptor, messages)
 
     def run_stream(
         self,
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[str, None, None]:
+    ) -> Generator[JAImsStreamingMessage, None, None]:
         """
-        Runs the agent in streaming mode with the given messages and tools.
+        Runs the agent in streaming mode with the given messages and tools and yields the streaming response message.
 
         Args:
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
@@ -191,7 +321,7 @@ class JAImsAgent:
             tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Yields:
-            str: The text delta of each response message.
+            JAImsStreamingMessage: The streaming response message.
         """
 
         self.__update_session(messages or [])
@@ -205,7 +335,7 @@ class JAImsAgent:
         response_message = None
         for delta_resp in streaming_response:
             response_message = delta_resp.message
-            yield delta_resp.textDelta or ""
+            yield delta_resp
 
         if not response_message:
             return
@@ -220,3 +350,46 @@ class JAImsAgent:
             return
 
         self.__end_session([response_message] + tool_results)
+
+    def message(
+        self,
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """
+        Sends the messages to the agent returning the response text, in a chat-like fashion.
+
+        Args:
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
+
+        Returns:
+            Optional[str]: The response text, or None if there is no response.
+        """
+
+        message = self.run(messages, tools, tool_constraints)
+
+        return message.get_text() if message else None
+
+    def message_stream(
+        self,
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
+    ) -> Generator[str, None, None]:
+        """
+        Sends the messages to the agent and streams the response text, in a chat-like fashion.
+
+        Args:
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
+
+        Yields:
+            str: The text delta of each response message.
+        """
+
+        for delta_resp in self.run_stream(messages, tools, tool_constraints):
+            yield delta_resp.textDelta or ""

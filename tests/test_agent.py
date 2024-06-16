@@ -48,7 +48,7 @@ class TestJAImsAgent(unittest.TestCase):
             llm_interface=self.llm_interface,
         )
 
-        response = sut.run()
+        response = sut.message()
         self.llm_interface.call.assert_called_once_with([], [], tool_constraints=None)
         self.assertEqual(response, "World")
 
@@ -60,7 +60,7 @@ class TestJAImsAgent(unittest.TestCase):
             tools=self.mock_tools,
         )
 
-        response = sut.run([self.mock_message], tool_constraints=["hello"])
+        response = sut.message([self.mock_message], tool_constraints=["hello"])
         self.llm_interface.call.assert_called_once_with(
             [self.mock_message], self.mock_tools, tool_constraints=["hello"]
         )
@@ -77,7 +77,7 @@ class TestJAImsAgent(unittest.TestCase):
             tools=self.mock_tools,
         )
 
-        response = sut.run([self.mock_message])
+        response = sut.message([self.mock_message])
         self.assertEqual(response, "World")
 
         self.llm_interface.call.assert_called_once_with(
@@ -107,7 +107,7 @@ class TestJAImsAgent(unittest.TestCase):
             tools=self.mock_tools,
         )
 
-        response = sut.run([first_message_mock])
+        response = sut.message([first_message_mock])
         self.assertEqual(response, "World")
 
         self.tool_manager.handle_tool_calls.assert_called_once_with(
@@ -126,7 +126,7 @@ class TestJAImsAgent(unittest.TestCase):
 
         override_tools = MagicMock()
 
-        response = sut.run([self.mock_message], [override_tools])
+        response = sut.message([self.mock_message], [override_tools])
 
         self.llm_interface.call.assert_called_once_with(
             [self.mock_message], [override_tools], tool_constraints=None

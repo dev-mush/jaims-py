@@ -14,15 +14,15 @@ with open("requirements-googleai.txt") as f:
 
 setup(
     name="jaims-py",
-    version="2.0.0-beta.6",
+    version="2.0.0-beta.7",
     packages=find_packages(),
-    description="A Python package for creating simple AI Agents using the OpenAI API.",
+    description="A Python package for creating LLM powered, agentic, platform agnostic software.",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Marco Musella",
     url="https://github.com/dev-mush/jaims-py",
     license="MIT",
-    keywords="An extensible library to create AI agents using many providers.",
+    keywords="An extensible library to create LLM Agents and LLM based applications.",
     install_requires=requirements,
     extras_require={
         "openai": requirements_openai,

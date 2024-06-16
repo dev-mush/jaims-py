@@ -1,5 +1,5 @@
 import os
-from ...interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
+from ...interfaces import JAImsLLMInterface
 from ...entities import (
     JAImsMessage,
     JAImsFunctionTool,
@@ -199,6 +199,9 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
             # 429	RESOURCE_EXHAUSTED	You've exceeded the rate limit.	Ensure you're within the model's rate limit. Request a quota increase if needed.
             # 500	INTERNAL	An unexpected error occurred on Google's side.	Wait a bit and retry your request. If the issue persists after retrying, please report it using the Send feedback button in Google AI Studio.
             # 503	UNAVAILABLE	The service may be temporarily overloaded or down.	Wait a bit and retry your request. If the issue persists after retrying, please report it using the Send feedback button in Google AI Studio.
+
+            if error is ValueError or not hasattr(error, "code"):
+                return ErrorHandlingMethod.FAIL
 
             if error.code == 429 or error.code == 503 or error.code == 500:
                 return ErrorHandlingMethod.EXPONENTIAL_BACKOFF

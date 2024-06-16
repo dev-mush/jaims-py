@@ -16,6 +16,19 @@ from jaims.interfaces import JAImsToolManager
 
 
 class JAImsDefaultToolManager(JAImsToolManager):
+    """
+    A class that manages tool calls in JAIms.
+
+    This class handles tool calls by executing the corresponding wrapped functions and formatting the results as messages to be consumed by the LLM.
+    Supports parallel execution of multiple tool calls.
+
+    Attributes:
+        None
+
+    Methods:
+        handle_tool_calls: Executes the tool calls and formats the results as messages to be consumed by the LLM.
+
+    """
 
     def handle_tool_calls(
         self,
@@ -23,6 +36,23 @@ class JAImsDefaultToolManager(JAImsToolManager):
         tool_calls: List[JAImsToolCall],
         tools: List[JAImsFunctionTool],
     ) -> List[JAImsMessage]:
+        """
+        Executes the tool calls and formats the results as messages to be consumed by the LLM.
+
+        The results of the tools have to be json-serializable in order to be sent as messages.
+
+        Args:
+            agent (JAImsAgent): The agent associated with the tool calls.
+            tool_calls (List[JAImsToolCall]): The list of tool calls to be executed.
+            tools (List[JAImsFunctionTool]): The list of available tools.
+
+        Returns:
+            List[JAImsMessage]: The list of tool response messages.
+
+        Raises:
+            JAImsUnexpectedFunctionCall: If a tool call does not match any available tool.
+
+        """
         results = []
         for fc in tool_calls:
             function_name = fc.tool_name

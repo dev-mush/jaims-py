@@ -65,7 +65,7 @@ def main():
     )
 
     agent = create_jaims_gemini(
-        model="gemini-1.5-pro-latest",
+        model="gemini-1.5-pro",
         history_manager=history_manager,
         tools=[sum, multiply, store_sum, store_multiply],
     )
@@ -78,14 +78,14 @@ def main():
             break
 
         if stream:
-            response = agent.run_stream(
+            response = agent.message_stream(
                 [JAImsMessage.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
-            response = agent.run(
+            response = agent.message(
                 [JAImsMessage.user_message(text=user_input)],
             )
             print(response)

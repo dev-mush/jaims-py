@@ -152,7 +152,7 @@ def main():
         user_input = input("> ")
         if user_input == "exit":
             break
-        response = agent.run_stream(
+        response = agent.message_stream(
             [JAImsMessage.user_message(user_input)],
         )
 

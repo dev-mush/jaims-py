@@ -13,6 +13,37 @@ def jaimsfunctiontool(
     params_descriptions: Optional[Dict[str, str]] = None,
     return_value_object_name: str = "ToolResponse",
 ):
+    """
+    Decorator function for creating JAIms function tools.
+
+    This is an experimental feature and I'm planning to improve it using reflection and other techniques to better infer the types of the parameters and return values.
+    Right now the decorated function MUST have type annotations in order for the decorator to work, and the decorator supports only simple python types and pydantic models.
+
+    When the decorated function expects only a pydantic model, it is forwarded as-is to the LLM (parsed with its json schema), when the function expects multiple parameters, The decorator creates a new pydantic model by inspecting the function signature.
+    You can customize the name of the generated model by passing the return_value_object_name parameter (defaults to "ToolResponse")
+
+    Args:
+        name (Optional[str]): The name of the tool. If not provided, the name of the decorated function will be used.
+        description (Optional[str]): The description of the tool. If not provided, an empty string will be used.
+        params_descriptions (Optional[Dict[str, str]]): A dictionary mapping parameter names to their descriptions.
+            If not provided, fields will have an empty string as description.
+        return_value_object_name (str): The name of the return value object. Defaults to "ToolResponse". Used only when the function expects multiple parameters.
+
+    Returns:
+        The decorated function as a JAImsFunctionTool.
+
+    Raises:
+        ValueError: If a parameter has no type annotation.
+
+    Example usage:
+
+    ```python
+        @jaimsfunctiontool(name="MyTool", description="This is my tool", params_descriptions={"param1": "The first parameter", "param2": "The second parameter"})
+        def my_function(param1: int, param2: str = "default"):
+            return param1 + len(param2)
+    ```
+    """
+
     def decorator(func):
         tool_name = name if name else func.__name__
         tool_description = description or ""

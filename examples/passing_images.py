@@ -45,7 +45,7 @@ def main():
         )
     ]
 
-    openai_response = openai_agent.run(
+    openai_response = openai_agent.message(
         [
             JAImsMessage(
                 role=JAImsMessageRole.USER,
@@ -61,7 +61,7 @@ def main():
     # print("OpenAI Response:")
     # print(openai_response)
 
-    gemini_response = gemini_agent.run(
+    gemini_response = gemini_agent.message(
         [
             JAImsMessage(
                 role=JAImsMessageRole.USER,

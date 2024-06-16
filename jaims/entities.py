@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# Enum class over all Json Types
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from PIL import Image
@@ -13,6 +12,17 @@ import functools
 
 
 class JAImsToolCall:
+    """
+    Models a tool call requrested by an LLM.
+
+    Some LLMs support parallel tool calls, identifying each call with a unique ID.
+
+    Attributes:
+        id (str): The ID of the tool call.
+        tool_name (str): The name of the tool being called.
+        tool_args (Optional[Dict[str, Any]]): The arguments for the tool call.
+    """
+
     def __init__(self, id: str, tool_name: str, tool_args: Optional[Dict[str, Any]]):
         self.id = id
         self.tool_name = tool_name
@@ -20,6 +30,17 @@ class JAImsToolCall:
 
 
 class JAImsToolResponse:
+    """
+    Models a response from a JAImsToolCall.
+
+    In case of parallel tool calls, the response is associated with the tool call ID.
+
+    Attributes:
+        tool_call_id (str): The ID of the tool call.
+        tool_name (str): The name of the tool.
+        response (Any): The response from the tool call.
+    """
+
     def __init__(self, tool_call_id: str, tool_name: str, response: Any):
         self.tool_call_id = tool_call_id
         self.tool_name = tool_name
@@ -30,6 +51,15 @@ JAImsImageContentType = Union[str, Image.Image]
 
 
 class JAImsImageContent:
+    """
+    Models an image content for a message that contains an image.
+
+    It can be either a PIL Image object or a URL to the image.
+
+    Attributes:
+        image (JAImsImageContentType): The image content.
+    """
+
     def __init__(self, image: JAImsImageContentType):
         self.image = image
 
@@ -38,6 +68,20 @@ JAImsContentType = Union[JAImsImageContent, str]
 
 
 class JAImsMessageRole(Enum):
+    """
+    Represents the roles of a JAImsMessage.
+
+    Roles have different meanings depending on the LLM used, this is an abstraction over the most common approaches.
+    It is mapped back by the adapter to the appropriate role based on the LLM implementation.
+
+    The JAImsMessageRole enum defines the different roles that a message can have in the JAIms system.
+    The available roles are:
+    - USER: Represents a message sent by a user.
+    - ASSISTANT: Represents a message sent by the assistant.
+    - TOOL: Represents a message sent by a tool.
+    - SYSTEM: Represents a system-instruction message.
+    """
+
     USER = "user"
     ASSISTANT = "assistant"
     TOOL = "tool"
@@ -45,6 +89,23 @@ class JAImsMessageRole(Enum):
 
 
 class JAImsMessage:
+    """
+    Represents a message to be sent to or received from an LLM.
+
+    Messages can have different types of content depending on the multimodality of the LLM.
+    A message can have also associated tool calls if an LLM has requested tool invocation, or a tool_response when a tool has been invoked. The tool_calls are represented as an array because they can be invoked in parallel when the LLM supports it.
+
+    Raw contains, depending on the adapter used, the raw response from the LLM used.
+
+    Attributes:
+        role (JAImsMessageRole): The role of the message (USER, ASSISTANT, SYSTEM, TOOL).
+        contents (Optional[List[JAImsContentType]]): The contents of the message.
+        name (Optional[str]): The name associated with the message.
+        tool_calls (Optional[List[JAImsToolCall]]): The tool calls associated with the message.
+        tool_response (Optional[JAImsToolResponse]): The tool response associated with the message.
+        raw (Optional[Any]): The raw data associated with the message.
+    """
+
     def __init__(
         self,
         role: JAImsMessageRole,
@@ -62,6 +123,14 @@ class JAImsMessage:
         self.raw = raw
 
     def get_text(self) -> Optional[str]:
+        """
+        Get the text content of the message.
+
+        When the message has multiple textual contents, they are concatenated.
+
+        Returns:
+            Optional[str]: The text content of the message, or None if there is no content.
+        """
         if self.contents is None:
             return None
 
@@ -81,6 +150,16 @@ class JAImsMessage:
         text: str,
         raw: Optional[Any] = None,
     ) -> JAImsMessage:
+        """
+        Create a user message.
+
+        Args:
+            text (str): The text content of the message.
+            raw (Optional[Any]): The raw data associated with the message.
+
+        Returns:
+            JAImsMessage: The created user message.
+        """
         return JAImsMessage(
             role=JAImsMessageRole.USER,
             contents=[text],
@@ -89,6 +168,16 @@ class JAImsMessage:
 
     @staticmethod
     def assistant_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
+        """
+        Create an assistant message.
+
+        Args:
+            text (str): The text content of the message.
+            raw (Optional[Any]): The raw data associated with the message.
+
+        Returns:
+            JAImsMessage: The created assistant message.
+        """
         return JAImsMessage(
             role=JAImsMessageRole.ASSISTANT,
             contents=[text],
@@ -97,6 +186,16 @@ class JAImsMessage:
 
     @staticmethod
     def system_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
+        """
+        Create a system message.
+
+        Args:
+            text (str): The text content of the message.
+            raw (Optional[Any]): The raw data associated with the message.
+
+        Returns:
+            JAImsMessage: The created system message.
+        """
         return JAImsMessage(
             role=JAImsMessageRole.SYSTEM,
             contents=[text],
@@ -107,6 +206,18 @@ class JAImsMessage:
     def tool_response_message(
         tool_call_id: str, tool_name: str, response: Any, raw: Optional[Any] = None
     ) -> JAImsMessage:
+        """
+        Create a tool response message.
+
+        Args:
+            tool_call_id (str): The ID of the tool call.
+            tool_name (str): The name of the tool.
+            response (Any): The response from the tool.
+            raw (Optional[Any]): The raw data associated with the message.
+
+        Returns:
+            JAImsMessage: The created tool response message.
+        """
         return JAImsMessage(
             role=JAImsMessageRole.TOOL,
             tool_response=JAImsToolResponse(tool_call_id, tool_name, response),
@@ -117,6 +228,16 @@ class JAImsMessage:
     def tool_call_message(
         tool_calls: List[JAImsToolCall], raw: Optional[Any] = None
     ) -> JAImsMessage:
+        """
+        Create a tool call message.
+
+        Args:
+            tool_calls (List[JAImsToolCall]): The tool calls associated with the message.
+            raw (Optional[Any]): The raw data associated with the message.
+
+        Returns:
+            JAImsMessage: The created tool call message.
+        """
         return JAImsMessage(
             role=JAImsMessageRole.ASSISTANT,
             tool_calls=tool_calls,
@@ -125,6 +246,17 @@ class JAImsMessage:
 
 
 class JAImsStreamingMessage:
+    """
+    Represents the streaming message being received by an LLM.
+
+    The message attribute contains the complete message being receved by the LLM, while the textDelta that is being streamed.
+    When reading the stream, you're usually interested in printing the textDelta, and once the stream is complete, you can use the message attribute to get the full message object.
+
+    Attributes:
+        message (JAImsMessage): The main message object.
+        textDelta (Optional[str]): A delta fragment of the message being streamed.
+    """
+
     def __init__(self, message: JAImsMessage, textDelta: Optional[str] = None):
         self.message = message
         self.textDelta = textDelta
@@ -137,16 +269,17 @@ class JAImsStreamingMessage:
 
 class JAImsFunctionToolDescriptor:
     """
-    Describes a function tool.
+    Models a function tool that an LLM interacts with.
 
-    Attributes
-    ----------
-        name : str
-            the tool name
-        description : str
-            the tool description
-        params: a BaseModel type
-            the tool parameters
+    This class is used to ensure that a function tool is parsed correctly for the LLM. A function tool is understood by an LLM generally trough its name, description, and a schema for the expected parameters.
+
+    The choice here has been to adopt pydantic BaseModel to ensure that the schema is correctly parsed and validated.
+    A function tool can also not have any parameters, in which case the params attribute is None.
+
+    Attributes:
+        name (str): The name of the function tool.
+        description (str): The description of the function tool.
+        params (Optional[type[BaseModel]]): The expected parameters for the function tool.
     """
 
     def __init__(
@@ -160,28 +293,87 @@ class JAImsFunctionToolDescriptor:
         self.params = params
 
     def json_schema(self) -> Dict[str, Any]:
+        """
+        Returns the JSON schema for the entity.
 
+        If there are no parameters, an empty dictionary is returned.
+
+        Returns:
+            A dictionary representing the JSON schema for the entity.
+        """
         if not self.params:
             return {}
 
-        return self.params.model_json_schema()
+        base_schema = self.params.model_json_schema()
+        filtered_schema = self.__remove_title_from_schema(base_schema)
+
+        return filtered_schema
+
+    def __remove_title_from_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively removes the "title" key from the schema.
+
+        Args:
+            schema (Dict[str, Any]): The schema to remove the title from.
+
+        Returns:
+            Dict[str, Any]: The schema without the title key.
+        """
+        if not isinstance(schema, dict):
+            return schema
+
+        return {
+            k: self.__remove_title_from_schema(v)
+            for k, v in schema.items()
+            if k != "title"
+        }
 
 
 class JAImsFunctionTool:
+    """
+    Wrapper class that binds a python function to a JAImsFunctionToolDescriptor
+
+    This class supports both simple function and class methods, and implements the __call__ method to seamlessly call the wrapped function.
+
+    When directly invoked as function, the class simply forwards the call to the wrapped function, when called trough the call_raw method, it parses the raw data into the expected parameters defined in the descriptor and forwards the formatted data to the wrapped function.
+
+    By default, the class uses a simple default formatter that assumes that the wrapped function expects as argument the parsed data from the descriptor, and no keyword arguments, use a custom formatter to handle more complex cases.
+
+    Also take a look at the jaimsfunctiontool decorator that lets you easily decorate a function to be used seamlessly as a function tool (supporting basic python types and pydantic models as parameters).
+
+    Args:
+        descriptor (JAImsFunctionToolDescriptor): The descriptor for the function tool.
+        function (Optional[Callable]): The function to be wrapped by the tool. Defaults to None.
+        formatter (Optional[Callable[[Dict], Tuple[tuple, dict]]]): The formatter function to parse the data. Defaults to None (uses the default formatter).
+    """
 
     def __init__(
         self,
         descriptor: JAImsFunctionToolDescriptor,
-        function: Callable,
+        function: Optional[Callable] = None,
         formatter: Optional[Callable[[Dict], Tuple[tuple, dict]]] = None,
     ):
-        self.function = function
         self.descriptor = descriptor
         self.formatter = formatter or self.__default_formatter
         self.__bound_instance = None
-        functools.update_wrapper(self, function)
+        self.function = function
+
+        if function:
+            functools.update_wrapper(self, function)
 
     def __call__(self, *args, **kwargs):
+        """
+        Calls the wrapped function with the given arguments.
+
+        Args:
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+
+        Returns:
+            Any: The result of the function call.
+        """
+        if not self.function:
+            return None
 
         if self.__bound_instance:
             return self.function(self.__bound_instance, *args, **kwargs)
@@ -189,10 +381,26 @@ class JAImsFunctionTool:
         return self.function(*args, **kwargs)
 
     def __get__(self, instance, owner):
+        """
+        This is a descriptor method that allows the class to be used as a decorator.
+        In this case, it captures the instance to which the class is bound so that it can pass it to the wrapped function in case the function is an instance method.
+        """
         self.__bound_instance = instance
         return self
 
     def __default_formatter(self, data: Dict) -> Tuple[tuple, dict]:
+        """
+        Default formatter function to parse the data.
+
+        Args:
+            data (Dict): The data to be formatted.
+
+        Returns:
+            Tuple[tuple, dict]: The formatted arguments and keyword arguments.
+
+        Raises:
+            ValueError: If the data does not match the expected parameters defined in the descriptor.
+        """
         if not self.descriptor.params or self.function is None:
             return ((), data)
 
@@ -208,15 +416,13 @@ class JAImsFunctionTool:
         Calls the wrapped function parsing the raw data (received from the LLM) into the expected parameters defined in the descriptor.
 
         Args:
-            data: dict
-                the raw data received from the LLM
+            kwargs (dict): The raw data received from the LLM.
 
         Returns:
-            Any
-                the result of the function call
+            Any: The result of the function call.
 
         Raises:
-            ValueError: if the data does not match the expected parameters defined in the descriptor
+            ValueError: If the data does not match the expected parameters defined in the descriptor.
         """
         if not self.function:
             return None
@@ -233,7 +439,7 @@ class JAImsFunctionTool:
 
 class JAImsModelCode:
     """
-    Constants for the LLM names.
+    Constants for the most common LLM models.
     """
 
     GEMINI_1_PRO = "gemini-1.0-pro"
@@ -261,6 +467,21 @@ class JAImsModelCode:
 
 
 class JAImsLLMConfig:
+    """
+    Configuration class for JAIms Language Model.
+
+    This class represents an abstraction over the most common configuration parameters for an LLM.
+    It can be used when adopting the platform-agnostic constructor for the JAImsAgent.
+    Use dedicated factories to pass specific configuration parameters to the LLM.
+
+    Some LLMs support response formatting specifications, use the appropriate dictionary to specify the format depending on the LLM implementation being used.
+
+    Args:
+        temperature (float, optional): The temperature parameter for generating responses. Defaults to 0.5.
+        max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 1024.
+        response_format (Optional[Dict[str, Any]], optional): The format of the response. Defaults to None.
+    """
+
     def __init__(
         self,
         temperature: float = 0.5,
@@ -275,6 +496,9 @@ class JAImsLLMConfig:
 class JAImsOptions:
     """
     Config options for the JAImsAgent when calling the remote LLM.
+
+    These are mainly client options that control the behavior of the client when calling the LLM API and in case of errors or timeouts.
+    JAIms natively supports exponential backoff for retries, and the options here allow to configure the behavior of the backoff.
     Exponential backoff is calculated using the formula: min(delay * exponential_base, exponential_cap) * (1 + jitter * random())
 
     Args:

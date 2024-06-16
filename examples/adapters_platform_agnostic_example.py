@@ -75,14 +75,14 @@ def main():
             break
 
         if stream:
-            response = agent.run_stream(
+            response = agent.message_stream(
                 [JAImsMessage.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
-            response = agent.run(
+            response = agent.message(
                 [JAImsMessage.user_message(text=user_input)],
             )
             print(response)
