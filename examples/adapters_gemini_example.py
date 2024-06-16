@@ -1,6 +1,4 @@
 from jaims import (
-    JAImsFunctionTool,
-    JAImsFunctionToolDescriptor,
     JAImsMessage,
     JAImsDefaultHistoryManager,
     jaimsfunctiontool,

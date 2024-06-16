@@ -41,8 +41,8 @@ system_prompt = """
 def main():
 
     agent = JAImsAgent.build(
-        model="gpt-4-turbo",
-        provider="openai",
+        model="gemini-1.5-pro",
+        provider="google",
         history_manager=JAImsDefaultHistoryManager(
             leading_prompts=[JAImsMessage.system_message(system_prompt)]
         ),
