@@ -14,7 +14,7 @@ with open("requirements-googleai.txt") as f:
 
 setup(
     name="jaims-py",
-    version="2.0.0-beta.7",
+    version="2.0.0-beta.8",
     packages=find_packages(),
     description="A Python package for creating LLM powered, agentic, platform agnostic software.",
     long_description=open("README.md").read(),

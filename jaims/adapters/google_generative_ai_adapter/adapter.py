@@ -76,38 +76,17 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
         else:
             return "model"
 
-    def __reprocess_json_schema(self, schema: dict) -> dict:
-
-        def walk_properties(properties):
-            for key, value in properties.items():
-                if isinstance(value, dict):
-                    if "anyOf" in value:
-                        value["type"] = value["anyOf"][0]["type"]
-                        del value["anyOf"]
-                    walk_properties(value)
-
-        dereferenced_schema: dict = jsonref.replace_refs(schema)  # type: ignore
-        walk_properties(dereferenced_schema["properties"])
-
-        return {
-            "type": dereferenced_schema["type"],
-            "properties": dereferenced_schema["properties"],
-            "required": dereferenced_schema.get("required", []),
-        }
-
     def __jaims_tools_to_gemini(
         self, jaims_tools: List[JAImsFunctionTool]
     ) -> List[content_types.Tool]:
         function_declarations = []
         for jaims_tool in jaims_tools:
-            # workaround necessary because google's gemini does not support refs in json schema
-            schema = self.__reprocess_json_schema(jaims_tool.descriptor.json_schema())
 
             function_declarations.append(
                 content_types.FunctionDeclaration(
                     name=jaims_tool.descriptor.name,
                     description=jaims_tool.descriptor.description,
-                    parameters=schema,
+                    parameters=jaims_tool.descriptor.json_schema(),
                 ),
             )
 

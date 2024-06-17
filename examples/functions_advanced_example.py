@@ -12,7 +12,7 @@ from jaims import (
 class PersonRecord(BaseModel):
     name: str = Field(description="the name of the person received")
     age: str = Field(description="the age of the person received")
-    interests: Optional[List] = Field(
+    interests: Optional[List[str]] = Field(
         description="the interests like hobbies and what the person likes to do",
     )
 
@@ -41,8 +41,8 @@ system_prompt = """
 def main():
 
     agent = JAImsAgent.build(
-        model="gemini-1.5-pro",
-        provider="google",
+        model="gpt-4o",
+        provider="openai",
         history_manager=JAImsDefaultHistoryManager(
             leading_prompts=[JAImsMessage.system_message(system_prompt)]
         ),

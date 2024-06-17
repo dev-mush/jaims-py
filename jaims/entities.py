@@ -5,6 +5,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from PIL import Image
 from pydantic import BaseModel
 import functools
+import jsonref
 
 # -------------------------
 # LLM Messaging Abstraction
@@ -292,7 +293,12 @@ class JAImsFunctionToolDescriptor:
         self.description = description
         self.params = params
 
-    def json_schema(self) -> Dict[str, Any]:
+    def json_schema(
+        self,
+        remove_titles: bool = True,
+        remove_any_of: bool = True,
+        dereference: bool = True,
+    ) -> Dict[str, Any]:
         """
         Returns the JSON schema for the entity.
 
@@ -304,10 +310,18 @@ class JAImsFunctionToolDescriptor:
         if not self.params:
             return {}
 
-        base_schema = self.params.model_json_schema()
-        filtered_schema = self.__remove_title_from_schema(base_schema)
+        schema = self.params.model_json_schema()
 
-        return filtered_schema
+        if dereference:
+            schema = self.__dereference_schema(schema)
+
+        if remove_any_of:
+            schema = self.__remove_any_of_for_multiple_types(schema)
+
+        if remove_titles:
+            schema = self.__remove_title_from_schema(schema)
+
+        return schema
 
     def __remove_title_from_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -326,6 +340,51 @@ class JAImsFunctionToolDescriptor:
             k: self.__remove_title_from_schema(v)
             for k, v in schema.items()
             if k != "title"
+        }
+
+    def __remove_any_of_for_multiple_types(
+        self, schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Recursively removes the "anyOf" key from the schema when multiple types are present.
+
+        Args:
+            schema (Dict[str, Any]): The schema to remove the anyOf key from.
+
+        Returns:
+            Dict[str, Any]: The schema without the anyOf key.
+        """
+
+        def walk_properties(properties):
+            for key, value in properties.items():
+                if isinstance(value, dict):
+                    if "anyOf" in value:
+                        first_values_domain = value["anyOf"][0]
+                        for k, v in first_values_domain.items():
+                            value[k] = v
+                        del value["anyOf"]
+                    walk_properties(value)
+
+        walk_properties(schema)
+
+        return schema
+
+    def __dereference_schema(self, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Recursively dereferences the schema.
+
+        Args:
+            schema (Dict[str, Any]): The schema to dereference.
+
+        Returns:
+            Dict[str, Any]: The dereferenced schema.
+        """
+        dereferenced_schema: dict = jsonref.replace_refs(schema)  # type: ignore
+
+        return {
+            "type": dereferenced_schema["type"],
+            "properties": dereferenced_schema["properties"],
+            "required": dereferenced_schema.get("required", []),
         }
 
 
