@@ -296,8 +296,8 @@ class JAImsFunctionToolDescriptor:
     def json_schema(
         self,
         remove_titles: bool = True,
-        remove_any_of: bool = True,
-        dereference: bool = True,
+        remove_any_of: bool = False,
+        dereference: bool = False,
     ) -> Dict[str, Any]:
         """
         Returns the JSON schema for the entity.
