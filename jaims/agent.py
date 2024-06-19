@@ -1,385 +1,395 @@
-import json
-import logging
-import os
-from typing import Any, Generator, List, Optional, Union
+from __future__ import annotations
+from typing import TYPE_CHECKING, Any, Literal
 
-from jaims.transaction_storage import (
-    JAImsTransactionStorageInterface,
-)
+from pydantic import BaseModel
 
-import openai
-from openai.types.chat import ChatCompletionChunk, ChatCompletion
+if TYPE_CHECKING:
+    from .interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
 
-from jaims.openai_wrappers import (
-    JAImsGPTModel,
-    JAImsTokensExpense,
-    JAImsOpenaiKWArgs,
-    JAImsOptions,
-    estimate_token_count,
-    get_openai_response,
-)
-from jaims.exceptions import (
-    JAImsMissingOpenaiAPIKeyException,
+from typing import Generator, List, Optional
+
+
+from jaims.default_tool_manager import JAImsDefaultToolManager
+
+
+from jaims.entities import (
+    JAImsFunctionToolDescriptor,
     JAImsMaxConsecutiveFunctionCallsExceeded,
+    JAImsMessage,
+    JAImsStreamingMessage,
+    JAImsFunctionTool,
+    JAImsLLMConfig,
+    JAImsOptions,
 )
-from jaims.function_handler import (
-    JAImsFunctionHandler,
-)
-from jaims.history_manager import HistoryManager
-
-
-class JAImsCallContext:
-    """
-    Represents the context for a JAIms run.
-    It is used when in case of function calling, the run restarts recursively.
-
-    Args:
-        openai_kwargs (JAImsOpenaiKWArgs): The OpenAI keyword arguments.
-        options (JAImsOptions): The JAIms options.
-        iterations (int, optional): The number of iterations. Defaults to 0.
-    """
-
-    def __init__(
-        self,
-        openai_kwargs: JAImsOpenaiKWArgs,
-        options: JAImsOptions,
-        iterations: int = 0,
-    ):
-        self.openai_kwargs = openai_kwargs
-        self.options = options
-        self.iterations = iterations
-
-    def add_iteration(self):
-        self.iterations += 1
-        if self.iterations > self.options.max_consecutive_function_calls:
-            raise JAImsMaxConsecutiveFunctionCallsExceeded(
-                f"Max consecutive function calls exceeded ({self.options.max_consecutive_function_calls})"
-            )
 
 
 class JAImsAgent:
     """
-    JAImsAgent realizes the class that interacts with the OpenAI API. It is an agent capable of
-    tool calling, with built in history management and token expense tracking.
+    Base  JAIms Agent class, interacts with the JAImsLLMInterface to run messages and tools.
 
-    Attributes:
-        openai_kwargs (JAImsOpenaiKWArgs): The OpenAI keyword arguments.
-        options (JAImsOptions): The options for the agent.
-        openai_api_key (Optional[str]): The OpenAI API key.
-        transaction_storage (JAImsTransactionStorageInterface): The transaction storage interface.
+    Tools can be injected in the constructor once, or passed when invoking (overriding the injected tools at every invocation).
+    Provide an history_manager if you plan to use the agent as a chat agent and want to keep track of the conversation.
+    Provide a tool_manager if you want to customize the tool handling.
 
-    Methods:
-        run: Runs the agent with the given messages and options.
-        get_expenses: Returns the tokens spent in the current session (all runs performed on this agent).
-        get_last_run_expenses: Returns the tokens spent in the last run of the agent.
-        get_run_history: Returns the history that will be sent to OpenAI for a run (returns the messages history passed to openai in the last run).
-        get_history: Returns the complete history of the agent.
-        clear_history: Clears the history.
+    Args:
+        llm_interface (JAImsLLMInterface): The LLM interface to use.
+        tools (Optional[List[JAImsFunctionTool]]): The list of tools to use. Defaults to None.
+        history_manager (Optional[JAImsHistoryManager]): The history manager to use. Defaults to None.
+        tool_manager (Optional[JAImsToolManager]): The tool manager to use. Defaults to None.
+        max_consecutive_tool_calls (int): The maximum number of consecutive tool calls allowed. Defaults to 10.
     """
 
     def __init__(
         self,
-        openai_kwargs: JAImsOpenaiKWArgs = JAImsOpenaiKWArgs(),
-        options: JAImsOptions = JAImsOptions(),
-        openai_api_key: Optional[str] = None,
-        transaction_storage: Optional[JAImsTransactionStorageInterface] = None,
+        llm_interface: JAImsLLMInterface,
+        history_manager: Optional[JAImsHistoryManager] = None,
+        tool_manager: Optional[JAImsToolManager] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        max_consecutive_tool_calls: int = 10,
     ):
-        openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise JAImsMissingOpenaiAPIKeyException()
-        openai.api_key = openai_api_key
+        self.llm_interface = llm_interface
+        self.tool_manager = tool_manager or JAImsDefaultToolManager()
+        self.tools = tools or []
+        self.history_manager = history_manager
+        self.max_consecutive_tool_calls = max_consecutive_tool_calls
+        self.__session_iteration = -1
+        self.__session_messages = []
 
-        self.__openai_kwargs = openai_kwargs
-        self.__options = options
-        self.__expense = JAImsAgent.__init_expense_dictionary()
-        self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
-        self.__function_handler = JAImsFunctionHandler()
-        self.__history_manager = HistoryManager()
-        if transaction_storage is None:
-            self.__transaction_storage = JAImsTransactionStorageInterface()
+    @staticmethod
+    def build(
+        model: str,
+        provider: Literal["openai", "google"],
+        api_key: Optional[str] = None,
+        options: Optional[JAImsOptions] = None,
+        config: Optional[JAImsLLMConfig] = None,
+        history_manager: Optional[JAImsHistoryManager] = None,
+        tool_manager: Optional[JAImsToolManager] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+    ) -> JAImsAgent:
+        """
+        Factory method to build an agent with the specified parameters.
+
+        Currently available providers are: [openai, google]. Make sure to install the required dependencies using:
+
+        ```bash
+        pip install jaims-py[openai, google]
+        ```
+
+        The API key will be read from the default environment variables when not provided.
+
+        Args:
+            model (str): The model to use.
+            provider (Literal["openai", "google"]): The provider to use.
+            api_key (Optional[str]): The API key. Defaults to None.
+            options (Optional[JAImsOptions]): The options. Defaults to None.
+            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
+            history_manager (Optional[JAImsHistoryManager]): The history manager. Defaults to None.
+            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
+
+        Returns:
+            JAImsAgent: The agent instance.
+        """
+
+        assert provider in [
+            "openai",
+            "google",
+        ], f"curretnly supported providers are: [openai, google] . If you're targeting an unsupported provider you should supply your own adapter instead."
+
+        if provider == "openai":
+            from .factories import openai_factory
+
+            return openai_factory(
+                model=model,
+                api_key=api_key,
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
+        elif provider == "google":
+            from .factories import google_factory
+
+            return google_factory(
+                model=model,
+                api_key=api_key,
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
         else:
-            self.__transaction_storage = transaction_storage
+            raise ValueError("Provider is not supported.")
+
+    def __update_session(self, session_messages: List[JAImsMessage]):
+        self.__session_iteration += 1
+        if self.__session_iteration > self.max_consecutive_tool_calls:
+            raise JAImsMaxConsecutiveFunctionCallsExceeded(self.__session_iteration)
+
+        if self.history_manager:
+            self.history_manager.add_messages(session_messages)
+            self.__session_messages = self.history_manager.get_messages()
+        else:
+            self.__session_messages.extend(session_messages)
+
+    def __end_session(self, messages: List[JAImsMessage]):
+
+        if self.history_manager:
+            self.history_manager.add_messages(messages)
+
+        self.__session_iteration = -1
+        self.__session_messages = []
+
+    def __get_tool_results(
+        self, message: JAImsMessage, tools: List[JAImsFunctionTool]
+    ) -> List[JAImsMessage]:
+        tool_results = []
+        if message and message.tool_calls:
+            tool_call_results = self.tool_manager.handle_tool_calls(
+                self, message.tool_calls, tools
+            )
+            tool_results.extend(tool_call_results)
+
+        return tool_results
 
     def run(
         self,
-        messages: Optional[List[dict]] = None,
-        override_options: Optional[JAImsOptions] = None,
-        override_openai_kwargs: Optional[JAImsOpenaiKWArgs] = None,
-    ) -> Union[str, Generator[str, None, None]]:
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
+    ) -> JAImsMessage:
         """
-        Starts a run calling openai with the passed messages.
-        During a run, unless cleared, the history of the previous runs is preserved and optimized (see HistoryManager), unless clear_history is called.
+        Runs the agent with the given messages and tools and returns the response message.
 
         Args:
-            messages (Optional[List[dict]], optional): The messages to be sent to OpenAI.
-            override_options (Optional[JAImsOptions], optional): The options to be used for this run (entirely overriding those passed in constructor, only for this run).
-            override_openai_kwargs (Optional[JAImsOpenaiKWArgs], optional): The OpenAI keyword arguments to be used for this run (entirely overriding those passed in constructor, only for this run).
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
+
+        Returns:
+            JAImsMessage: The response message.
         """
-        messages = messages or []
-        if override_openai_kwargs:
-            messages = override_openai_kwargs.messages
 
-        self.__history_manager.add_messages(messages)
-        options = override_options or self.__options
-        openai_kwargs = override_openai_kwargs or self.__openai_kwargs
-        call_context = JAImsCallContext(openai_kwargs, options)
+        self.__update_session(messages or [])
 
-        self.__last_run_expense = JAImsAgent.__init_expense_dictionary()
-        return self.__call_openai(call_context)
+        run_tools = tools or self.tools
 
-    def __call_openai(
-        self, call_context: JAImsCallContext
-    ) -> Union[str, Generator[str, None, None]]:
-        # throws if max consecutive calls is exceeded
-        call_context.add_iteration()
-        messages = self.__history_manager.get_messages_for_current_run(
-            options=call_context.options,
-            openai_kwargs=call_context.openai_kwargs,
+        response_message = self.llm_interface.call(
+            self.__session_messages, run_tools, tool_constraints=tool_constraints
         )
 
-        call_context.openai_kwargs.messages = messages
+        tool_results = self.__get_tool_results(response_message, run_tools)
+        if tool_results and not tool_constraints:
+            return self.run(
+                [response_message] + tool_results,
+                run_tools,
+                tool_constraints=tool_constraints,
+            )
 
-        response = get_openai_response(
-            call_context.openai_kwargs,
-            call_context.options,
+        self.__end_session([response_message] + tool_results)
+        return response_message
+
+    @staticmethod
+    def run_model(
+        model: str,
+        provider: Literal["openai", "google"],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tools_constraints: Optional[List[str]] = None,
+        api_key: Optional[str] = None,
+        options: Optional[JAImsOptions] = None,
+        config: Optional[JAImsLLMConfig] = None,
+        tool_manager: Optional[JAImsToolManager] = None,
+    ) -> JAImsMessage:
+        """
+        Runs the specified model with the given parameters and returns the response message.
+
+        Args:
+            model (str): The model to use.
+            provider (Literal["openai", "google"]): The provider to use.
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
+            tools_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None.
+            api_key (Optional[str]): The API key. Defaults to None.
+            options (Optional[JAImsOptions]): The options. Defaults to None.
+            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
+            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+
+        Returns:
+            JAImsMessage: The response message.
+        """
+
+        agent = JAImsAgent.build(
+            model=model,
+            provider=provider,
+            api_key=api_key,
+            options=options,
+            config=config,
+            tool_manager=tool_manager,
+            tools=tools,
         )
 
-        if isinstance(response, openai.Stream):
-            return self.__handle_streaming_response(response, call_context)
-        else:
-            return self.__handle_response(response, call_context)
+        return agent.run(messages=messages, tool_constraints=tools_constraints)
 
-    def __handle_streaming_response(
+    def run_tool(
         self,
-        response: openai.Stream[ChatCompletionChunk],
-        call_context: JAImsCallContext,
+        descriptor: JAImsFunctionToolDescriptor,
+        messages: Optional[List[JAImsMessage]] = None,
+    ) -> Any:
+        """
+        Runs a single tool with the given messages and returns the expected response data.
+
+        Args:
+            tool (JAImsFunctionToolDescriptor): The tool to run.
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+
+        Returns:
+            BaseModel: The expected response data defined by the tool descriptor.
+        """
+
+        response_data = None
+
+        def callback(response: BaseModel):
+            nonlocal response_data
+            response_data = response
+
+        tool = JAImsFunctionTool(
+            descriptor=descriptor,
+            function=callback,
+        )
+
+        self.run(messages, [tool], tool_constraints=[descriptor.name])
+
+        if not response_data:
+            raise ValueError(f"Tool {tool.descriptor.name} did not return any data.")
+
+        return response_data
+
+    @staticmethod
+    def run_tool_model(
+        model: str,
+        provider: Literal["openai", "google"],
+        descriptor: JAImsFunctionToolDescriptor,
+        messages: Optional[List[JAImsMessage]] = None,
+        api_key: Optional[str] = None,
+        options: Optional[JAImsOptions] = None,
+        config: Optional[JAImsLLMConfig] = None,
+        tool_manager: Optional[JAImsToolManager] = None,
+    ) -> Any:
+        """
+        Runs a single tool with the given messages and returns the expected response data.
+
+        Args:
+            model (str): The model to use.
+            provider (Literal["openai", "google"]): The provider to use.
+            descriptor (JAImsFunctionToolDescriptor): The tool to run.
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            api_key (Optional[str]): The API key. Defaults to None.
+            options (Optional[JAImsOptions]): The options. Defaults to None.
+            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
+            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+
+        Returns:
+            BaseModel: The expected response data defined by the tool descriptor.
+        """
+
+        agent = JAImsAgent.build(
+            model=model,
+            provider=provider,
+            api_key=api_key,
+            options=options,
+            config=config,
+            tool_manager=tool_manager,
+        )
+
+        return agent.run_tool(descriptor, messages)
+
+    def run_stream(
+        self,
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
+    ) -> Generator[JAImsStreamingMessage, None, None]:
+        """
+        Runs the agent in streaming mode with the given messages and tools and yields the streaming response message.
+
+        Args:
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
+
+        Yields:
+            JAImsStreamingMessage: The streaming response message.
+        """
+
+        self.__update_session(messages or [])
+
+        run_tools = tools or self.tools
+
+        streaming_response = self.llm_interface.call_streaming(
+            self.__session_messages, run_tools, tool_constraints=tool_constraints
+        )
+
+        response_message = None
+        for delta_resp in streaming_response:
+            response_message = delta_resp.message
+            yield delta_resp
+
+        if not response_message:
+            return
+
+        tool_results = self.__get_tool_results(response_message, run_tools)
+        if tool_results and not tool_constraints:
+            yield from self.run_stream(
+                [response_message] + tool_results,
+                run_tools,
+                tool_constraints=tool_constraints,
+            )
+            return
+
+        self.__end_session([response_message] + tool_results)
+
+    def message(
+        self,
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
+    ) -> Optional[str]:
+        """
+        Sends the messages to the agent returning the response text, in a chat-like fashion.
+
+        Args:
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
+
+        Returns:
+            Optional[str]: The response text, or None if there is no response.
+        """
+
+        message = self.run(messages, tools, tool_constraints)
+
+        return message.get_text() if message else None
+
+    def message_stream(
+        self,
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
+        tool_constraints: Optional[List[str]] = None,
     ) -> Generator[str, None, None]:
-        accumulated_chunks = None
-        for completion_chunk in response:
-            if len(completion_chunk.choices) > 0:
-                # check content exists
-                message_delta = completion_chunk.choices[0].delta
-                accumulated_chunks = JAImsAgent.__accumulate_choice_delta(
-                    accumulated_chunks, message_delta
-                )
-
-                if (
-                    call_context.options.debug_stream_function_call
-                    and message_delta.tool_calls
-                ):
-                    print(
-                        message_delta.tool_calls[0].function.arguments,  # type: ignore
-                        flush=True,
-                        end="",
-                    )
-
-                if completion_chunk.choices[0].finish_reason is not None:
-                    if (
-                        call_context.options.debug_stream_function_call
-                        and accumulated_chunks.tool_calls
-                    ):
-                        print("\n")
-
-                    # rebuilding entire completion chunk with accumulated delta
-                    completion_chunk.choices[0].delta = accumulated_chunks
-                    self.__store_transaction(call_context, completion_chunk)
-
-                    self.__handle_token_expense_from_openai_response(
-                        accumulated_chunks.model_dump(), call_context
-                    )
-
-                    yield from self.__handle_response_message(
-                        accumulated_chunks, call_context
-                    )
-
-                if message_delta.content:
-                    yield message_delta.content
-
-    def __handle_response(
-        self, response: ChatCompletion, call_context: JAImsCallContext
-    ):
-        if len(response.choices) == 0:
-            return ""
-
-        # log token expense
-        self.__handle_token_expense_from_openai_response(
-            response.model_dump(), call_context
-        )
-
-        self.__store_transaction(call_context, response)
-
-        message = response.choices[0].message
-        return self.__handle_response_message(message, call_context)
-
-    def __handle_response_message(self, message, call_context: JAImsCallContext):
-        logger = logging.getLogger(__name__)
-        logger.debug(f"OpenAI response message:\n{message}")
-
-        message_dict = message.model_dump(exclude_none=True)
-        self.__history_manager.add_messages([message_dict])
-
-        if message.tool_calls:
-            result_messages = self.__function_handler.handle_from_message(
-                message=message_dict,
-                function_wrappers=call_context.openai_kwargs.tools or [],
-            )
-            if call_context.openai_kwargs.tool_choice == "auto":
-                self.__history_manager.add_messages(result_messages)
-                return self.__call_openai(call_context)
-
-        # if the response was streaming only an empty string must be returned
-        # because the streaming generator already yielded the response, otherwise
-        # the content is returned.
-        if call_context.openai_kwargs.stream:
-            return ""
-        else:
-            return message.content or ""
-
-    def __store_transaction(
-        self,
-        call_context: JAImsCallContext,
-        response: Union[ChatCompletion, ChatCompletionChunk],
-    ):
-        self.__transaction_storage.store_transaction(
-            request=call_context.openai_kwargs.to_dict(),
-            response=response.model_dump(exclude_none=True),
-        )
-
-    def __handle_token_expense_from_openai_response(
-        self, response, call_context: JAImsCallContext
-    ):
-        if not call_context.openai_kwargs.stream:
-            expense = JAImsTokensExpense.from_openai_usage_dictionary(
-                call_context.openai_kwargs.model, response["usage"]
-            )
-        else:
-            sent_messages = self.__history_manager.get_messages_for_current_run(
-                options=call_context.options,
-                openai_kwargs=call_context.openai_kwargs,
-            )
-            prompt_tokens = estimate_token_count(
-                json.dumps(sent_messages), model=call_context.openai_kwargs.model
-            )
-            completion_tokens = estimate_token_count(
-                json.dumps(response), model=call_context.openai_kwargs.model
-            )
-            total_tokens = prompt_tokens + completion_tokens
-            expense = JAImsTokensExpense(
-                gpt_model=call_context.openai_kwargs.model,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                total_tokens=total_tokens,
-                rough_estimate=True,
-            )
-
-        self.__last_run_expense[expense.gpt_model.string].add_from(expense)
-        self.__expense[expense.gpt_model.string].add_from(expense)
-
-    def get_expenses(self):
         """
-        Returns the tokens spent in the current session in an array, one for each model.
-        """
-        return [
-            expense for expense in self.__expense.values() if expense.total_tokens > 0
-        ]
+        Sends the messages to the agent and streams the response text, in a chat-like fashion.
 
-    def get_last_run_expenses(self):
-        """
-        Returns the tokens spent in the last run of the agent in an array, one for each model.
-        """
-        return [
-            expense
-            for expense in self.__last_run_expense.values()
-            if expense.total_tokens > 0
-        ]
+        Args:
+            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
-    def get_run_history(
-        self,
-        override_options: Optional[JAImsOptions] = None,
-        override_openai_kwargs: Optional[JAImsOpenaiKWArgs] = None,
-    ):
-        """
-        Returns the history that will be sent given the current options and openai kwargs to openai for a run.
-        """
-        options = override_options or self.__options
-        openai_kwargs = override_openai_kwargs or self.__openai_kwargs
-
-        messages = self.__history_manager.get_messages_for_current_run(
-            options, openai_kwargs
-        )
-        return messages
-
-    def get_history(self):
-        """
-        Returns the complete history of the agent.
+        Yields:
+            str: The text delta of each response message.
         """
 
-        return self.__history_manager.get_history()
-
-    def clear_history(self):
-        """
-        Clears the history.
-        """
-        self.__history_manager.clear_history()
-
-    @staticmethod
-    def __init_expense_dictionary():
-        dict = {}
-        for gpt in JAImsGPTModel:
-            dict[gpt.string] = JAImsTokensExpense(gpt_model=gpt)
-
-        return dict
-
-    @staticmethod
-    def __merge_tool_calls(existing_tool_calls, new_tool_calls_delta):
-        if not existing_tool_calls:
-            return new_tool_calls_delta
-
-        new_tool_calls = existing_tool_calls[:]
-        for new_call_delta in new_tool_calls_delta:
-            existing_call = next(
-                (item for item in new_tool_calls if item.index == new_call_delta.index),
-                None,
-            )
-            if not existing_call:
-                new_tool_calls.append(new_call_delta)
-            else:
-                if (
-                    existing_call.type != new_call_delta.type
-                    and new_call_delta.type is not None
-                ):
-                    existing_call.type = new_call_delta.type
-                if (
-                    existing_call.id != new_call_delta.id
-                    and new_call_delta.id is not None
-                ):
-                    existing_call.id = new_call_delta.id
-                if existing_call.function is None:
-                    existing_call.function = new_call_delta.function
-                else:
-                    if (
-                        existing_call.function.name != new_call_delta.function.name
-                        and new_call_delta.function.name is not None
-                    ):
-                        existing_call.function.name = new_call_delta.function.name
-                    existing_call.function.arguments = (
-                        existing_call.function.arguments or ""
-                    ) + (new_call_delta.function.arguments or "")
-
-        return new_tool_calls
-
-    @staticmethod
-    def __accumulate_choice_delta(accumulator, new_delta):
-        if accumulator is None:
-            return new_delta
-
-        if new_delta.content:
-            accumulator.content = (accumulator.content or "") + new_delta.content
-        if new_delta.role:
-            accumulator.role = (accumulator.role or "") + new_delta.role
-        if new_delta.tool_calls:
-            accumulator.tool_calls = JAImsAgent.__merge_tool_calls(
-                accumulator.tool_calls, new_delta.tool_calls
-            )
-
-        return accumulator
+        for delta_resp in self.run_stream(messages, tools, tool_constraints):
+            yield delta_resp.textDelta or ""
