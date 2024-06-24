@@ -2,14 +2,13 @@
     <img width="300" src="https://github.com/dev-mush/jaims-py/assets/669003/5c53381f-25b5-4141-bcd2-7457863eafb9" >
 </p>
 
-
-# JAIms 
+# JAIms
 
 _My name is Bot, JAIms Bot._ 🕶️
 
-JAIms is a lightweight Python package that lets you build powerful LLM-Based agents or LLM powered applications with ease. It is platform agnostic, so you can focus on integrating AI into your software and let JAIms handle the boilerplate of communicating with the LLM API. 
+JAIms is a lightweight Python package that lets you build powerful LLM-Based agents or LLM powered applications with ease. It is platform agnostic, so you can focus on integrating AI into your software and let JAIms handle the boilerplate of communicating with the LLM API.
 The main goal of JAIms is to provide a simple and easy-to-use interface to leverage the power of LLMs in your software, without having to worry about the specifics of the underlying provider, and to seamlessly integrate LLM functionality with your own codebase.
-JAIms natively supports OpenAI's GPT models and Google's gemini models, and it can be easily extended to connect to your own model and endpoints.
+JAIms natively supports OpenAI's GPT models, Google's gemini models and Mistral models, and it can be easily extended to connect to your own model and endpoints.
 
 ## Installation
 
@@ -19,10 +18,10 @@ To avoid overcluttering your project with dependencies, by running:
 pip install jaims-py
 ```
 
-You will get the core package that is provider independent (meaning, it won't install any dependencies other than Pillow and Pydantic). In order to also install the built in providers (currently openai and google) you can run:
+You will get the core package that is provider independent (meaning, it won't install any dependencies other than Pillow and Pydantic). In order to also install the built in providers (currently openai, google and mistral) you can run:
 
 ```bash
-pip install jaims-py[openai,google]
+pip install jaims-py[openai,google,mistral]
 ```
 
 ## 👨‍💻 Usage
@@ -103,11 +102,11 @@ But there is much more, check outh the examples folder for more advanced or nuan
 
 ### ✨ Main Features
 
-- Built in support for OpenAI and Google's gemini models (more coming soon).
-- Function calling support even in streamed conversations with built in providers (openai, google).
+- Built in support for OpenAI, Google's gemini and Mistral models (more coming soon).
+- Function calling support even in streamed conversations with built in providers (openai, google, mistral).
 - Built in conversation history management to allow fast creation of chatbots, this can be easily extended to support more advanced history management strategies.
 - Image support for multimodal LLMs 🖼️
-- Error handling and exponential backoff for built in providers (openai, google)
+- Error handling and exponential backoff for built in providers (openai, google, mistral)
 
 ### 🧠 Guiding Principles
 
@@ -134,7 +133,6 @@ My [next steps](docs/roadmap.md#-next---high-priority) will be to improve tests 
 Since I've started the development of JAIms, a few similar projects have been started, and granted that I didn't have time to check them out yet, some might easily be more advanced, yet I've widely employed this library in my projects and those of the company I work for, and I've been actively maintaining it, so I'm planning to keep it up to date and to improve it as much as I can.
 
 I've opted for an open source by default approach to allow others to benefit from it and force myself to keep the code clean and well documented, just remember that since this is, for now, a side-project developed just by me (that am fairly new to python), expect the possibility of encountering some issues and don't expect an immediate patch from me, any help is very much appreciated 🤗.
-
 
 ## 📝 License
 
