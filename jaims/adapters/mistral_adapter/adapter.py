@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 import json
 from math import ceil
 from typing import Generator, Union
-from mistralai.exceptions import MistralConnectionException
+from mistralai.exceptions import MistralAPIStatusException, MistralConnectionException
 from mistralai.client import MistralClient
 from mistralai.models.chat_completion import (
     ChatCompletionResponse,
@@ -131,7 +131,7 @@ class JAImsMistralKWArgs:
         tools: Optional[List[Dict]] = None,
     ) -> JAImsMistralKWArgs:
         """
-        Returns a new JAImsOpenaiKWArgs instance with the passed kwargs overridden.
+        Returns a new JAImsMistralKWArgs instance with the passed kwargs overridden.
         """
         return JAImsMistralKWArgs(
             model=model if model else self.model,
@@ -233,7 +233,7 @@ class MistralTransactionStorageInterface(ABC):
 
 class JAImsMistralAdapter(JAImsLLMInterface):
     """
-    The JAIms OpenAI adapter.
+    The JAIms Mistral adapter.
     """
 
     def __init__(
@@ -503,11 +503,10 @@ class JAImsMistralAdapter(JAImsLLMInterface):
         is_stream = kwargs.pop("stream", False)
 
         def handle_mistral_error(error) -> ErrorHandlingMethod:
-            # errors are handled according to the guidelines here: https://platform.openai.com/docs/guides/error-codes/api-errors (dated 03/10/2023)
             # this map indexes all the error that require a retry or an exponential backoff, every other error is a fail
             error_handling_map = {
                 MistralConnectionException: ErrorHandlingMethod.RETRY,
-                # openai.APITimeoutError: ErrorHandlingMethod.RETRY,
+                MistralAPIStatusException: ErrorHandlingMethod.RETRY,
             }
 
             for error_type, error_handling_method in error_handling_map.items():
