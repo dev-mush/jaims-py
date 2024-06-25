@@ -11,7 +11,6 @@ from mistralai.models.chat_completion import (
     DeltaMessage,
     ToolCall,
 )
-import tiktoken
 from typing import List, Optional, Dict
 from PIL import Image
 
@@ -153,80 +152,6 @@ class JAImsMistralKWArgs:
             tool_choice=tool_choice if tool_choice else self.tool_choice,
             tools=tools if tools else self.tools,
         )
-
-
-class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
-    def __init__(
-        self,
-        options: JAImsOptions,
-        history_max_tokens: int,
-        model: str,
-    ):
-        self.options = options
-        self.history_max_tokens = history_max_tokens
-        self.model = model
-
-    def optimize_history(self, messages: List[JAImsMessage]) -> List:
-        # Copying the whole history to avoid altering the original one
-        buffer = messages.copy()
-
-        # calculate the tokens for the compound history
-        messages_tokens = self.__tokens_from_messages(buffer, self.model)
-
-        while messages_tokens > self.history_max_tokens:
-            if not buffer:
-                raise Exception(
-                    f"Unable to fit messages with current max tokens {self.history_max_tokens}."
-                )
-            # Popping the first (oldest) message from the chat history between the user and agent
-            buffer.pop(0)
-            # Recalculating the tokens for the compound history
-            messages_tokens = self.__tokens_from_messages(buffer, self.model)
-
-        return buffer
-
-    def __estimate_token_count(self, string: str, model: str) -> int:
-        """Returns the number of tokens in a text string."""
-
-        encoding = tiktoken.encoding_for_model(model)
-        num_tokens = len(encoding.encode(string))
-        return num_tokens
-
-    def __estimate_image_tokens_count(self, width: int, height: int):
-        h = ceil(height / 512)
-        w = ceil(width / 512)
-        n = w * h
-        total = 85 + 170 * n
-        return total
-
-    def __tokens_from_messages(self, messages: List[JAImsMessage], model):
-        """Returns the number of tokens used by a list of messages."""
-
-        images = []
-        parsed = []
-        for message in messages:
-            if message.contents:
-                for item in message.contents:
-                    if isinstance(item, str):
-                        parsed.append(item)
-                    elif isinstance(item, Image.Image):
-                        images.append(item)
-                    else:
-                        raise Exception(f"Unsupported content type: {type(item)}")
-
-            if message.tool_calls:
-                for tool_call in message.tool_calls:
-                    parsed.append(tool_call.tool_name + json.dumps(tool_call.tool_args))
-
-            if message.tool_response:
-                parsed.append(message.tool_response.response)
-
-        image_tokens = 0
-        for image in images:
-            width, height = image.size
-            image_tokens += self.__estimate_image_tokens_count(width, height)
-
-        return self.__estimate_token_count(json.dumps(parsed), model) + image_tokens
 
 
 class MistralTransactionStorageInterface(ABC):
