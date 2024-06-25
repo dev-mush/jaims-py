@@ -1,6 +1,6 @@
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from ...agent import JAImsAgent
-from ...entities import JAImsFunctionTool, JAImsOptions, JAImsLLMConfig
+from ...entities import JAImsFunctionTool, JAImsOptions
 from ...interfaces import JAImsHistoryManager, JAImsToolManager
 from .adapter import (
     JAImsMistralAdapter,
@@ -12,7 +12,7 @@ from .adapter import (
 def create_jaims_mistral(
     api_key: Optional[str] = None,
     options: Optional[JAImsOptions] = None,
-    kwargs: Optional[Union[JAImsMistralKWArgs, Dict]] = None,
+    kwargs: Optional[Union[JAImsMistralKWArgs, Dict[str, Any]]] = None,
     transaction_storage: Optional[MistralTransactionStorageInterface] = None,
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
