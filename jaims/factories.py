@@ -105,3 +105,53 @@ def google_factory(
         tool_manager=tool_manager,
         tools=tools,
     )
+
+
+def mistral_factory(
+    model: str,
+    api_key: Optional[str] = None,
+    options: Optional[JAImsOptions] = None,
+    config: Optional[JAImsLLMConfig] = None,
+    history_manager: Optional[JAImsHistoryManager] = None,
+    tool_manager: Optional[JAImsToolManager] = None,
+    tools: Optional[List[JAImsFunctionTool]] = None,
+) -> JAImsAgent:
+    """
+    Factory function to create an instance of JAImsAgent using Mistral as the underlying model.
+
+    Args:
+        model (str): The name or identifier of the OpenAI model to use.
+        api_key (Optional[str]): The API key for accessing the OpenAI service. Defaults to None.
+        options (Optional[JAImsOptions]): Additional options for configuring the JAImsAgent. Defaults to None.
+        config (Optional[JAImsLLMConfig]): Configuration options specific to the OpenAI language model. Defaults to None.
+        history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
+        tool_manager (Optional[JAImsToolManager]): The tool manager to use for managing JAImsFunctionTools. Defaults to None.
+        tools (Optional[List[JAImsFunctionTool]]): The list of JAImsFunctionTools to use. Defaults to None.
+
+    Returns:
+        JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
+
+    """
+    from .adapters.mistral_adapter import create_jaims_mistral
+    from .adapters.mistral_adapter import JAImsMistralKWArgs
+
+    config = config or JAImsLLMConfig()
+    options = options or JAImsOptions()
+    tool_choice = None
+
+    kwargs = JAImsMistralKWArgs().copy_with_overrides(
+        model=model,
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
+        response_format=config.response_format,
+        tool_choice=tool_choice,
+    )
+
+    return create_jaims_mistral(
+        api_key=api_key,
+        options=options,
+        kwargs=kwargs,
+        history_manager=history_manager,
+        tool_manager=tool_manager,
+        tools=tools,
+    )

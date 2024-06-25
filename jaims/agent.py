@@ -58,7 +58,7 @@ class JAImsAgent:
     @staticmethod
     def build(
         model: str,
-        provider: Literal["openai", "google"],
+        provider: Literal["openai", "google", "mistral"],
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         config: Optional[JAImsLLMConfig] = None,
@@ -69,17 +69,17 @@ class JAImsAgent:
         """
         Factory method to build an agent with the specified parameters.
 
-        Currently available providers are: [openai, google]. Make sure to install the required dependencies using:
+        Currently available providers are: [openai, google, mistral]. Make sure to install the required dependencies using:
 
         ```bash
-        pip install jaims-py[openai, google]
+        pip install jaims-py[openai, google, mistral]
         ```
 
         The API key will be read from the default environment variables when not provided.
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google"]): The provider to use.
+            provider (Literal["openai", "google", "mistral"]): The provider to use.
             api_key (Optional[str]): The API key. Defaults to None.
             options (Optional[JAImsOptions]): The options. Defaults to None.
             config (Optional[JAImsLLMConfig]): The config. Defaults to None.
@@ -91,10 +91,11 @@ class JAImsAgent:
             JAImsAgent: The agent instance.
         """
 
-        assert provider in [
-            "openai",
-            "google",
-        ], f"curretnly supported providers are: [openai, google] . If you're targeting an unsupported provider you should supply your own adapter instead."
+        supported_providers = ["openai", "google", "mistral"]
+
+        assert (
+            provider in supported_providers
+        ), f"currently supported providers are: [{', '.join(supported_providers)}]. If you're targeting an unsupported provider you should supply your own adapter instead."
 
         if provider == "openai":
             from .factories import openai_factory
@@ -120,6 +121,18 @@ class JAImsAgent:
                 tool_manager=tool_manager,
                 tools=tools,
             )
+        elif provider == "mistral":
+            from .factories import mistral_factory
+
+            return mistral_factory(
+                model=model,
+                api_key=api_key,
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
         else:
             raise ValueError("Provider is not supported.")
 
@@ -135,7 +148,6 @@ class JAImsAgent:
             self.__session_messages.extend(session_messages)
 
     def __end_session(self, messages: List[JAImsMessage]):
-
         if self.history_manager:
             self.history_manager.add_messages(messages)
 
@@ -194,7 +206,7 @@ class JAImsAgent:
     @staticmethod
     def run_model(
         model: str,
-        provider: Literal["openai", "google"],
+        provider: Literal["openai", "google", "mistral"],
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         tools_constraints: Optional[List[str]] = None,
@@ -208,7 +220,7 @@ class JAImsAgent:
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google"]): The provider to use.
+            provider (Literal["openai", "google", "mistral"]): The provider to use.
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
             tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
             tools_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None.
@@ -270,7 +282,7 @@ class JAImsAgent:
     @staticmethod
     def run_tool_model(
         model: str,
-        provider: Literal["openai", "google"],
+        provider: Literal["openai", "google", "mistral"],
         descriptor: JAImsFunctionToolDescriptor,
         messages: Optional[List[JAImsMessage]] = None,
         api_key: Optional[str] = None,
@@ -283,7 +295,7 @@ class JAImsAgent:
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google"]): The provider to use.
+            provider (Literal["openai", "google", "mistral"]): The provider to use.
             descriptor (JAImsFunctionToolDescriptor): The tool to run.
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
             api_key (Optional[str]): The API key. Defaults to None.
