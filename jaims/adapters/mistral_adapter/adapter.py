@@ -56,6 +56,7 @@ class JAImsMistralKWArgs:
         stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
         temperature (float, optional): The temperature for generating creative text. Defaults to 0.0.
         top_p (Optional[int], optional): The top-p value for nucleus sampling. Defaults to None.
+        response_format (Optional[Dict], optional): The format for the generated response. Defaults to None.
         stop (Union[Optional[str], Optional[List[str]]], optional): The stop condition for the generated response. Defaults to None.
         tool_choice (Union[str, Dict], optional): The choice of tool to use. Defaults to "auto".
         tools (Optional[List[JAImsFunctionToolWrapper]], optional): The list of function tool wrappers to use. Defaults to None.
@@ -70,6 +71,7 @@ class JAImsMistralKWArgs:
         temperature: float = 0.0,
         top_p: Optional[int] = None,
         random_seed: Optional[int] = None,
+        response_format: Optional[Dict] = None,
         stop: Union[Optional[str], Optional[List[str]]] = None,
         tool_choice: Union[str, Dict] = "auto",
         tools: Optional[List[Dict]] = None,
@@ -81,6 +83,7 @@ class JAImsMistralKWArgs:
         self.temperature = temperature
         self.top_p = top_p
         self.seed = random_seed
+        self.response_format = response_format
         self.stop = stop
         self.tool_choice = tool_choice
         self.tools = tools
@@ -96,6 +99,7 @@ class JAImsMistralKWArgs:
             "seed": self.seed,
             "tools": self.tools,
             "tool_choice": self.tool_choice,
+            "response_format": self.response_format,
             "stop": self.stop,
         }
 
@@ -115,6 +119,7 @@ class JAImsMistralKWArgs:
             top_p=kwargs.get("top_p", None),
             stop=kwargs.get("stop", None),
             tool_choice=kwargs.get("tool_choice", "auto"),
+            response_format=kwargs.get("response_format", None),
             tools=kwargs.get("tools", None),
         )
 
@@ -126,6 +131,7 @@ class JAImsMistralKWArgs:
         stream: Optional[bool] = None,
         temperature: Optional[float] = None,
         top_p: Optional[int] = None,
+        response_format: Optional[Dict] = None,
         stop: Optional[Union[str, List[str]]] = None,
         tool_choice: Optional[Union[str, Dict]] = None,
         tools: Optional[List[Dict]] = None,
@@ -140,6 +146,9 @@ class JAImsMistralKWArgs:
             stream=stream if stream else self.stream,
             temperature=temperature if temperature else self.temperature,
             top_p=top_p if top_p else self.top_p,
+            response_format=response_format
+            if response_format
+            else self.response_format,
             stop=stop if stop else self.stop,
             tool_choice=tool_choice if tool_choice else self.tool_choice,
             tools=tools if tools else self.tools,
