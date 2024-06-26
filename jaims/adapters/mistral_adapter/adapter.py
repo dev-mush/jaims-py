@@ -200,7 +200,13 @@ class JAImsMistralAdapter(JAImsLLMInterface):
         if tools:
             mistral_tools = self.__jaims_tools_to_mistral(tools)
 
-            tool_choice = args.get("tool_choice", "auto")
+            tool_choice = "auto"
+            if tool_constraints:
+                if len(tool_constraints) > 1:
+                    tool_choice = "any"
+                else:
+                    tool_choice = "none"
+
             args["tools"] = mistral_tools
             args["tool_choice"] = tool_choice
 
