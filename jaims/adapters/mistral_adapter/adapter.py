@@ -202,7 +202,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
             tool_choice = "auto"
             if tool_constraints:
-                if len(tool_constraints) > 1:
+                if len(tool_constraints) >= 1:
                     tool_choice = "any"
                 else:
                     tool_choice = "none"
