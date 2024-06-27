@@ -218,7 +218,11 @@ class JAImsMistralAdapter(JAImsLLMInterface):
         tools: List[JAImsFunctionTool],
         tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
-        args = self.__get_args(messages, tools)
+        args = self.__get_args(
+            messages=messages,
+            tools=tools,
+            tool_constraints=tool_constraints,
+        )
         response = self.___get_mistral_response(args, self.options)
         assert isinstance(response, ChatCompletionResponse)
         if self.transaction_storage:
