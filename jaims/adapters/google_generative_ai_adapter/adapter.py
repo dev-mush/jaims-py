@@ -81,13 +81,14 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
     ) -> List[content_types.Tool]:
         function_declarations = []
         for jaims_tool in jaims_tools:
-
             function_declarations.append(
                 content_types.FunctionDeclaration(
                     name=jaims_tool.descriptor.name,
                     description=jaims_tool.descriptor.description,
                     parameters=jaims_tool.descriptor.json_schema(
-                        remove_any_of=True, dereference=True
+                        remove_any_of=True,
+                        dereference=True,
+                        remove_all_of=True,
                     ),
                 ),
             )
@@ -193,9 +194,7 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
-
         def handle_gemini_error(error):
-
             # From: https://ai.google.dev/gemini-api/docs/troubleshooting
             # 400	INVALID_ARGUMENT	The request body is malformed.	Check the API reference for request format, examples, and supported versions. Using features from a newer API version with an older endpoint can cause errors.
             # 403	PERMISSION_DENIED	Your API key doesn't have the required permissions.	Check that your API key is set and has the right access.

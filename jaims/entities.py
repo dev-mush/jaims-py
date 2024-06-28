@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import Enum
+import json
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from PIL import Image
 from pydantic import BaseModel
@@ -297,6 +298,7 @@ class JAImsFunctionToolDescriptor:
         self,
         remove_titles: bool = True,
         remove_any_of: bool = False,
+        remove_all_of: bool = False,
         dereference: bool = False,
     ) -> Dict[str, Any]:
         """
@@ -317,6 +319,9 @@ class JAImsFunctionToolDescriptor:
 
         if remove_any_of:
             schema = self.__remove_any_of_for_multiple_types(schema)
+
+        if remove_all_of:
+            schema = self.__remove_all_of_for_multiple_types(schema)
 
         if remove_titles:
             schema = self.__remove_title_from_schema(schema)
@@ -363,6 +368,33 @@ class JAImsFunctionToolDescriptor:
                         for k, v in first_values_domain.items():
                             value[k] = v
                         del value["anyOf"]
+                    walk_properties(value)
+
+        walk_properties(schema)
+
+        return schema
+
+    def __remove_all_of_for_multiple_types(
+        self, schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Recursively removes "allOf" keys from the schema when multiple types are present.
+
+        Args:
+            schema (Dict[str, Any]): The schema to remove the allOf key from.
+
+        Returns:
+            Dict[str, Any]: The schema without the allOf key.
+        """
+
+        def walk_properties(properties):
+            for _, value in properties.items():
+                if isinstance(value, dict):
+                    if "allOf" in value:
+                        first_values_domain = value["allOf"][0]
+                        for k, v in first_values_domain.items():
+                            value[k] = v
+                        del value["allOf"]
                     walk_properties(value)
 
         walk_properties(schema)
