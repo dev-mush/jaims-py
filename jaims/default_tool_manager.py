@@ -9,7 +9,7 @@ from jaims.entities import (
     JAImsFunctionTool,
     JAImsUnexpectedFunctionCall,
     JAImsToolCall,
-    JAImsMessage,
+    JAImsToolResponse,
 )
 
 from jaims.interfaces import JAImsToolManager
@@ -35,7 +35,7 @@ class JAImsDefaultToolManager(JAImsToolManager):
         agent: JAImsAgent,
         tool_calls: List[JAImsToolCall],
         tools: List[JAImsFunctionTool],
-    ) -> List[JAImsMessage]:
+    ) -> List[JAImsToolResponse]:
         """
         Executes the tool calls and formats the results as messages to be consumed by the LLM.
 
@@ -47,7 +47,7 @@ class JAImsDefaultToolManager(JAImsToolManager):
             tools (List[JAImsFunctionTool]): The list of available tools.
 
         Returns:
-            List[JAImsMessage]: The list of tool response messages.
+            List[JAImsToolResponse]: A list of JAImsToolResponse objects representing the results of the tool calls.
 
         Raises:
             JAImsUnexpectedFunctionCall: If a tool call does not match any available tool.
@@ -64,13 +64,28 @@ class JAImsDefaultToolManager(JAImsToolManager):
                 raise JAImsUnexpectedFunctionCall(function_name)
 
             args = fc.tool_args or {}
-            fc_result = tool_wrapper.call_raw(**args)
-            results.append(
-                JAImsMessage.tool_response_message(
-                    tool_call_id=fc.id,
-                    tool_name=fc.tool_name,
-                    response=fc_result,
+            try:
+                fc_result = tool_wrapper.call_raw(**args)
+                results.append(
+                    JAImsToolResponse(
+                        tool_call_id=fc.id,
+                        tool_name=fc.tool_name,
+                        response=fc_result,
+                    )
                 )
-            )
+            except Exception as e:
+                if agent.tool_call_error_behavior == "raise":
+                    raise e
+                if agent.tool_call_error_behavior == "ignore":
+                    continue
+
+                results.append(
+                    JAImsToolResponse(
+                        tool_call_id=fc.id,
+                        tool_name=fc.tool_name,
+                        response=str(e),
+                        is_error=True,
+                    )
+                )
 
         return results

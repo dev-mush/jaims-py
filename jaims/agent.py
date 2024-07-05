@@ -22,6 +22,9 @@ from jaims.entities import (
     JAImsOptions,
 )
 
+supported_providers_list = ["openai", "google", "mistral", "anthropic"]
+SUPPORTED_PROVIDERS = Literal["openai", "google", "mistral", "anthropic"]
+
 
 class JAImsAgent:
     """
@@ -46,6 +49,9 @@ class JAImsAgent:
         tool_manager: Optional[JAImsToolManager] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         max_consecutive_tool_calls: int = 10,
+        tool_call_error_behavior: Literal[
+            "raise", "forward_to_llm", "ignore"
+        ] = "raise",
     ):
         self.llm_interface = llm_interface
         self.tool_manager = tool_manager or JAImsDefaultToolManager()
@@ -54,11 +60,12 @@ class JAImsAgent:
         self.max_consecutive_tool_calls = max_consecutive_tool_calls
         self.__session_iteration = -1
         self.__session_messages = []
+        self.tool_call_error_behavior = tool_call_error_behavior
 
     @staticmethod
     def build(
         model: str,
-        provider: Literal["openai", "google", "mistral"],
+        provider: SUPPORTED_PROVIDERS,
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         config: Optional[JAImsLLMConfig] = None,
@@ -79,7 +86,7 @@ class JAImsAgent:
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google", "mistral"]): The provider to use.
+            provider (SUPPORTED_PROVIDERS): The provider to use.
             api_key (Optional[str]): The API key. Defaults to None.
             options (Optional[JAImsOptions]): The options. Defaults to None.
             config (Optional[JAImsLLMConfig]): The config. Defaults to None.
@@ -91,11 +98,9 @@ class JAImsAgent:
             JAImsAgent: The agent instance.
         """
 
-        supported_providers = ["openai", "google", "mistral"]
-
         assert (
-            provider in supported_providers
-        ), f"currently supported providers are: [{', '.join(supported_providers)}]. If you're targeting an unsupported provider you should supply your own adapter instead."
+            provider in supported_providers_list
+        ), f"currently supported providers are: [{', '.join(supported_providers_list)}]. If you're targeting an unsupported provider you should supply your own adapter instead."
 
         if provider == "openai":
             from .factories import openai_factory
@@ -154,17 +159,44 @@ class JAImsAgent:
         self.__session_iteration = -1
         self.__session_messages = []
 
-    def __get_tool_results(
-        self, message: JAImsMessage, tools: List[JAImsFunctionTool]
-    ) -> List[JAImsMessage]:
-        tool_results = []
-        if message and message.tool_calls:
-            tool_call_results = self.tool_manager.handle_tool_calls(
-                self, message.tool_calls, tools
-            )
-            tool_results.extend(tool_call_results)
+    def __should_forward_to_llm(
+        self, messages: List[JAImsMessage], tool_constraints: Optional[List[str]] = None
+    ) -> bool:
+        """
+        Evaluates if the messages contain any data that should be forwarded to the LLM
+        depending on the current tool_constraints configuration.
+        """
+        if tool_constraints and len(tool_constraints) > 0:
+            return False
 
-        return tool_results
+        for message in messages:
+            if message.tool_calls:
+                return True
+
+        return False
+
+    def __evaluate_response_messages(
+        self,
+        llm_response_message: JAImsMessage,
+        tools: List[JAImsFunctionTool],
+    ) -> List[JAImsMessage]:
+        """
+        Evaluates the response message and returns a list of messages to be sent to the LLM, possibly including tool results.
+        """
+        final_messages = [llm_response_message]
+
+        if llm_response_message.tool_calls:
+            tool_responses = self.tool_manager.handle_tool_calls(
+                self,
+                llm_response_message.tool_calls,
+                tools,
+            )
+            if tool_responses:
+                final_messages.append(
+                    JAImsMessage.tool_response_message(tool_responses)
+                )
+
+        return final_messages
 
     def run(
         self,
@@ -192,21 +224,22 @@ class JAImsAgent:
             self.__session_messages, run_tools, tool_constraints=tool_constraints
         )
 
-        tool_results = self.__get_tool_results(response_message, run_tools)
-        if tool_results and not tool_constraints:
+        next_messages = self.__evaluate_response_messages(response_message, run_tools)
+
+        if self.__should_forward_to_llm(next_messages, tool_constraints):
             return self.run(
-                [response_message] + tool_results,
+                next_messages,
                 run_tools,
                 tool_constraints=tool_constraints,
             )
 
-        self.__end_session([response_message] + tool_results)
+        self.__end_session(next_messages)
         return response_message
 
     @staticmethod
     def run_model(
         model: str,
-        provider: Literal["openai", "google", "mistral"],
+        provider: Literal["openai", "google", "mistral", "anthropic"],
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         tools_constraints: Optional[List[str]] = None,
@@ -352,16 +385,17 @@ class JAImsAgent:
         if not response_message:
             return
 
-        tool_results = self.__get_tool_results(response_message, run_tools)
-        if tool_results and not tool_constraints:
+        next_messages = self.__evaluate_response_messages(response_message, run_tools)
+
+        if self.__should_forward_to_llm(next_messages, tool_constraints):
             yield from self.run_stream(
-                [response_message] + tool_results,
+                next_messages,
                 run_tools,
                 tool_constraints=tool_constraints,
             )
             return
 
-        self.__end_session([response_message] + tool_results)
+        self.__end_session(next_messages)
 
     def message(
         self,

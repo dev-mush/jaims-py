@@ -41,12 +41,16 @@ class JAImsToolResponse:
         tool_call_id (str): The ID of the tool call.
         tool_name (str): The name of the tool.
         response (Any): The response from the tool call.
+        is_error (bool): Whether the response is an error.
     """
 
-    def __init__(self, tool_call_id: str, tool_name: str, response: Any):
+    def __init__(
+        self, tool_call_id: str, tool_name: str, response: Any, is_error: bool = False
+    ):
         self.tool_call_id = tool_call_id
         self.tool_name = tool_name
         self.response = response
+        self.is_error = is_error
 
 
 JAImsImageContentType = Union[str, Image.Image]
@@ -104,7 +108,7 @@ class JAImsMessage:
         contents (Optional[List[JAImsContentType]]): The contents of the message.
         name (Optional[str]): The name associated with the message.
         tool_calls (Optional[List[JAImsToolCall]]): The tool calls associated with the message.
-        tool_response (Optional[JAImsToolResponse]): The tool response associated with the message.
+        tool_responses (Optional[List[JAImsToolResponse]]): The tool responses associated with a message.
         raw (Optional[Any]): The raw data associated with the message.
     """
 
@@ -114,14 +118,14 @@ class JAImsMessage:
         contents: Optional[List[JAImsContentType]] = None,
         name: Optional[str] = None,
         tool_calls: Optional[List[JAImsToolCall]] = None,
-        tool_response: Optional[JAImsToolResponse] = None,
+        tool_responses: Optional[List[JAImsToolResponse]] = None,
         raw: Optional[Any] = None,
     ):
         self.role = role
         self.contents = contents
         self.name = name
         self.tool_calls = tool_calls
-        self.tool_response = tool_response
+        self.tool_responses = tool_responses
         self.raw = raw
 
     def get_text(self) -> Optional[str]:
@@ -206,15 +210,13 @@ class JAImsMessage:
 
     @staticmethod
     def tool_response_message(
-        tool_call_id: str, tool_name: str, response: Any, raw: Optional[Any] = None
+        responses: List[JAImsToolResponse], raw: Optional[Any] = None
     ) -> JAImsMessage:
         """
         Create a tool response message.
 
         Args:
-            tool_call_id (str): The ID of the tool call.
-            tool_name (str): The name of the tool.
-            response (Any): The response from the tool.
+            responses (List[JAImsToolResponse]): The tool responses associated with the message.
             raw (Optional[Any]): The raw data associated with the message.
 
         Returns:
@@ -222,7 +224,7 @@ class JAImsMessage:
         """
         return JAImsMessage(
             role=JAImsMessageRole.TOOL,
-            tool_response=JAImsToolResponse(tool_call_id, tool_name, response),
+            tool_responses=responses,
             raw=raw,
         )
 

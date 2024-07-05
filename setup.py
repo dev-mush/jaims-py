@@ -15,9 +15,12 @@ with open("requirements-googleai.txt") as f:
 with open("requirements-mistral.txt") as f:
     requirements_mistral = f.read().splitlines()
 
+with open("requirements-anthropic.txt") as f:
+    requirements_anthropic = f.read().splitlines()
+
 setup(
     name="jaims-py",
-    version="2.0.0-beta.14",
+    version="2.0.0-beta.15",
     packages=find_packages(),
     description="A Python package for creating LLM powered, agentic, platform agnostic software.",
     long_description=open("README.md").read(),
@@ -31,5 +34,10 @@ setup(
         "openai": requirements_openai,
         "google": requirements_google_ai,
         "mistral": requirements_mistral,
+        "anthropic": requirements_anthropic,
+        "all": requirements_openai
+        + requirements_google_ai
+        + requirements_mistral
+        + requirements_anthropic,
     },
 )
