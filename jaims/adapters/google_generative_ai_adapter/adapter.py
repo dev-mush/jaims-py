@@ -23,7 +23,6 @@ from google.generativeai import GenerativeModel
 from google.generativeai.types import content_types
 from google.generativeai.types import generation_types
 import google.ai.generativelanguage as glm
-import jsonref
 
 
 class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
@@ -44,8 +43,8 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
 
     def call(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
         response = self.__get_gemini_response(messages, tools, tool_constraints)
@@ -54,8 +53,8 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
 
     def call_streaming(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
         response = self.__get_gemini_response(
@@ -77,17 +76,22 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
             return "model"
 
     def __jaims_tools_to_gemini(
-        self, jaims_tools: List[JAImsFunctionTool]
-    ) -> List[content_types.Tool]:
+        self, jaims_tools: Optional[List[JAImsFunctionTool]] = None
+    ) -> Optional[List[content_types.Tool]]:
+
+        if not jaims_tools:
+            return None
+
         function_declarations = []
         for jaims_tool in jaims_tools:
-
             function_declarations.append(
                 content_types.FunctionDeclaration(
                     name=jaims_tool.descriptor.name,
                     description=jaims_tool.descriptor.description,
                     parameters=jaims_tool.descriptor.json_schema(
-                        remove_any_of=True, dereference=True
+                        remove_any_of=True,
+                        dereference=True,
+                        remove_all_of=True,
                     ),
                 ),
             )
@@ -188,14 +192,12 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
 
     def __get_gemini_response(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
-
         def handle_gemini_error(error):
-
             # From: https://ai.google.dev/gemini-api/docs/troubleshooting
             # 400	INVALID_ARGUMENT	The request body is malformed.	Check the API reference for request format, examples, and supported versions. Using features from a newer API version with an older endpoint can cause errors.
             # 403	PERMISSION_DENIED	Your API key doesn't have the required permissions.	Check that your API key is set and has the right access.
@@ -214,12 +216,12 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
 
         def call_gemini():
             system_instruction, gemini_messages = self.__jaims_messages_to_gemini(
-                messages
+                messages or []
             )
-            gemini_tools = self.__jaims_tools_to_gemini(tools) if tools else None
+            gemini_tools = self.__jaims_tools_to_gemini(tools)
 
             tool_config = None
-            if tool_constraints and tools:
+            if tool_constraints and gemini_tools:
                 tool_config = content_types.to_tool_config(
                     {
                         "function_calling_config": {

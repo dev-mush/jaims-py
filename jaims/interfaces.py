@@ -34,17 +34,17 @@ class JAImsLLMInterface(ABC):
     @abstractmethod
     def call(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
         """
         Executes the language learning model on a list of messages and tools.
 
         Args:
-            messages: A list of JAImsMessage objects representing the input messages.
-            tools: A list of JAImsFunctionTool objects representing the tools to be applied.
-            tool_constraints: An optional list of tool constraints.
+            messages: A list of JAImsMessage objects representing the input messages. Defaults to None.
+            tools: A list of JAImsFunctionTool objects representing the tools to be applied. Defaults to None.
+            tool_constraints: An optional list of tool constraints. Defaults to None.
 
         Returns:
             A JAImsMessage object representing the output message.
@@ -57,17 +57,17 @@ class JAImsLLMInterface(ABC):
     @abstractmethod
     def call_streaming(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
         """
         Executes the language learning model on a list of messages and tools in a streaming fashion.
 
         Args:
-            messages: A list of JAImsMessage objects representing the input messages.
-            tools: A list of JAImsFunctionTool objects representing the tools to be applied.
-            tool_constraints: An optional list of tool constraints.
+            messages: A list of JAImsMessage objects representing the input messages. Defaults to None.
+            tools: A list of JAImsFunctionTool objects representing the tools to be applied. Defaults to None.
+            tool_constraints: An optional list of tool constraints. Defaults to None.
 
         Yields:
             A JAImsStreamingMessage object representing the output message.

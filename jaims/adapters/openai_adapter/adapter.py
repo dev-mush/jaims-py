@@ -9,7 +9,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from openai.types.chat.chat_completion_chunk import ChoiceDelta, ChoiceDeltaToolCall
 from openai import Stream
 import tiktoken
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Literal
 from PIL import Image
 
 from ...interfaces import (
@@ -283,6 +283,8 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         kwargs: Optional[Union[JAImsOpenaiKWArgs, Dict]] = None,
+        kwargs_messages_behavior: Literal["append", "replace"] = "append",
+        kwargs_tools_behavior: Literal["append", "replace"] = "append",
         transaction_storage: Optional[OpenAITransactionStorageInterface] = None,
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -291,42 +293,56 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         self.options = options or JAImsOptions()
         self.kwargs = kwargs or JAImsOpenaiKWArgs()
+        self.kwargs_messages_behavior = kwargs_messages_behavior
+        self.kwargs_tools_behavior = kwargs_tools_behavior
         self.transaction_storage = transaction_storage
 
     def __get_args(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
+
+        if tool_constraints and len(tool_constraints) > 1:
+            raise ValueError(
+                "Only one tool choice is allowed when using the OpenAI API."
+            )
 
         if isinstance(self.kwargs, JAImsOpenaiKWArgs):
             args = self.kwargs.to_dict()
         else:
             args = deepcopy(self.kwargs)
 
-        openai_messages = self.__jaims_messages_to_openai(messages)
+        # handle messages
+
+        openai_messages = self.__jaims_messages_to_openai(messages or [])
+        if self.kwargs_messages_behavior == "append":
+            kwargs_messages = args.get("messages", [])
+            openai_messages = kwargs_messages + openai_messages
+
         args["messages"] = openai_messages
         args["stream"] = stream
 
-        if tools:
-            openai_tools = self.__jaims_tools_to_openai(tools)
+        # handle tools
 
-            tool_choice = "auto"
-            if tool_constraints:
-                if len(tool_constraints) > 1:
-                    raise ValueError(
-                        "Only one tool choice is allowed when using the OpenAI API."
-                    )
+        openai_tools = self.__jaims_tools_to_openai(tools or [])
+        if self.kwargs_tools_behavior == "append":
+            openai_tools = args.get("tools", []) + openai_tools
 
-                tool_choice = {
-                    "type": "function",
-                    "function": {
-                        "name": tool_constraints[0],
-                    },
-                }
+        tool_choice = "auto"
+        if tool_constraints:
+            tool_choice = {
+                "type": "function",
+                "function": {
+                    "name": tool_constraints[0],
+                },
+            }
+        elif args.get("tool_choice", None):
+            tool_choice = args["tool_choice"]
 
+        if len(openai_tools) > 0:
             args["tools"] = openai_tools
             args["tool_choice"] = tool_choice
 
@@ -334,8 +350,8 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def call(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
         args = self.__get_args(messages, tools, tool_constraints)
@@ -351,8 +367,8 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def call_streaming(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
         args = self.__get_args(

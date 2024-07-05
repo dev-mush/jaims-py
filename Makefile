@@ -2,6 +2,7 @@ build-package:
 	if [ -d "dist" ]; then rm -rf dist; fi
 	if [ -d "build" ]; then rm -rf build; fi
 	if [ -d "jaims_py.egg-info" ]; then rm -rf jaims_py.egg-info; fi
+	pip install setuptools wheel twine 
 	python setup.py sdist bdist_wheel
 
 deploy: build-package

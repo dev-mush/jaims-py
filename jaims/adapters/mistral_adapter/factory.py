@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 from ...agent import JAImsAgent
 from ...entities import JAImsFunctionTool, JAImsOptions
 from ...interfaces import JAImsHistoryManager, JAImsToolManager
@@ -17,12 +17,16 @@ def create_jaims_mistral(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    kwargs_messages_behavior: Literal["append", "replace"] = "append",
+    kwargs_tools_behavior: Literal["append", "replace"] = "append",
 ) -> JAImsAgent:
     adapter = JAImsMistralAdapter(
         api_key=api_key,
         options=options,
         kwargs=kwargs,
         transaction_storage=transaction_storage,
+        kwargs_messages_behavior=kwargs_messages_behavior,
+        kwargs_tools_behavior=kwargs_tools_behavior,
     )
 
     agent = JAImsAgent(
