@@ -78,7 +78,7 @@ def main():
 
     agent = create_jaims_mistral(
         kwargs=JAImsMistralKWArgs(
-            model="mistral-small-latest",
+            model="mistral-large-latest",
             stream=stream,
         ),
         transaction_storage=FileTransactionStorage(),

@@ -59,7 +59,7 @@ class JAImsMistralKWArgs:
 
     def __init__(
         self,
-        model: str = "open-mistral-7b.",
+        model: str = "open-mistral-7b",
         messages: List[dict] = [],
         max_tokens: int = 1024,
         stream: bool = False,
@@ -141,9 +141,9 @@ class JAImsMistralKWArgs:
             stream=stream if stream else self.stream,
             temperature=temperature if temperature else self.temperature,
             top_p=top_p if top_p else self.top_p,
-            response_format=response_format
-            if response_format
-            else self.response_format,
+            response_format=(
+                response_format if response_format else self.response_format
+            ),
             stop=stop if stop else self.stop,
             tool_choice=tool_choice,
             tools=tools if tools else self.tools,
@@ -171,6 +171,8 @@ class JAImsMistralAdapter(JAImsLLMInterface):
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         kwargs: Optional[Union[JAImsMistralKWArgs, Dict]] = None,
+        kwargs_messages_behavior: Literal["append", "replace"] = "append",
+        kwargs_tools_behavior: Literal["append", "replace"] = "append",
         transaction_storage: Optional[MistralTransactionStorageInterface] = None,
     ):
         self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
@@ -179,12 +181,14 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
         self.options = options or JAImsOptions()
         self.kwargs = kwargs or JAImsMistralKWArgs()
+        self.kwargs_messages_behavior = kwargs_messages_behavior
+        self.kwargs_tools_behavior = kwargs_tools_behavior
         self.transaction_storage = transaction_storage
 
     def __get_args(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
@@ -193,20 +197,31 @@ class JAImsMistralAdapter(JAImsLLMInterface):
         else:
             args = deepcopy(self.kwargs)
 
-        mistral_messages = self.__jaims_messages_to_mistral(messages)
+        mistral_messages = self.__jaims_messages_to_mistral(messages or [])
+        if self.kwargs_messages_behavior == "append":
+            kwargs_messages = args.get("messages", [])
+            mistral_messages = kwargs_messages + mistral_messages
+
         args["messages"] = mistral_messages
         args["stream"] = stream
 
-        if tools:
-            mistral_tools = self.__jaims_tools_to_mistral(tools)
+        # handle tools
 
-            tool_choice = "auto"
-            if tool_constraints:
-                if len(tool_constraints) >= 1:
-                    tool_choice = "any"
-                else:
-                    tool_choice = "none"
+        mistral_tools = self.__jaims_tools_to_mistral(tools or [])
+        if self.kwargs_tools_behavior == "append":
+            mistral_tools = args.get("tools", []) + mistral_tools
 
+        tool_choice = "auto"
+        if tool_constraints is not None:
+            if len(tool_constraints) >= 1:
+                tool_choice = "any"
+            else:
+                tool_choice = "none"
+
+        elif args.get("tool_choice"):
+            tool_choice = args.get("tool_choice")
+
+        if mistral_tools:
             args["tools"] = mistral_tools
             args["tool_choice"] = tool_choice
 
@@ -214,8 +229,8 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
     def call(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> JAImsMessage:
         args = self.__get_args(
@@ -235,8 +250,8 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
     def call_streaming(
         self,
-        messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        messages: Optional[List[JAImsMessage]] = None,
+        tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
         args = self.__get_args(
