@@ -30,19 +30,19 @@ def multiply(a: int, b: int):
 
 
 @jaimsfunctiontool(
-    description="use this function when the user wants to multiply two numbers"
+    description="use this function when the user wants to store the result of an operation",
 )
-def store_sum(result: int):
-    print("----storing sum----")
+def store_result(result: int):
+    print("----storing result----")
     print(result)
     print("-------------------")
 
 
 def main():
-    stream = True
-    model = "gpt-4o"  # use JAImsModelCode.GPT_4o to avoid typing / remembering the model name
+    stream = False
+    model = "claude-3-5-sonnet-20240620"  # use JAImsModelCode.GPT_4o to avoid typing / remembering the model name
     # model = "gemini-1.5-pro-latest"
-    provider = "openai"  # either "openai" or "google"
+    provider = "anthropic"  # either "openai" or "google"
     # provider = "google"
 
     agent = JAImsAgent.build(
@@ -52,18 +52,11 @@ def main():
             temperature=0.5,
             max_tokens=2000,
         ),
-        history_manager=JAImsDefaultHistoryManager(
-            history=[
-                JAImsMessage.assistant_message(
-                    text="Hello, I am JAIms, your personal assistant."
-                ),
-                JAImsMessage.assistant_message(text="How can I help you today?"),
-            ]
-        ),
+        history_manager=JAImsDefaultHistoryManager(),
         tools=[
             sum,
             multiply,
-            store_sum,
+            store_result,
         ],
     )
 

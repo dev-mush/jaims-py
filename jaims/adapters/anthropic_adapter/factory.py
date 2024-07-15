@@ -5,15 +5,13 @@ from ...interfaces import JAImsHistoryManager, JAImsToolManager
 from .adapter import (
     JAImsAnthropicAdapter,
     JAImsAnthropicKWArgs,
-    OpenAITransactionStorageInterface,
 )
 
 
-def create_jaims_openai(
+def create_jaims_anthropic(
     api_key: Optional[str] = None,
     options: Optional[JAImsOptions] = None,
     kwargs: Optional[Union[JAImsAnthropicKWArgs, Dict]] = None,
-    transaction_storage: Optional[OpenAITransactionStorageInterface] = None,
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
@@ -24,8 +22,7 @@ def create_jaims_openai(
     adapter = JAImsAnthropicAdapter(
         api_key=api_key,
         options=options,
-        params=kwargs,
-        transaction_storage=transaction_storage,
+        kwargs=kwargs,
         kwargs_messages_behavior=kwargs_messages_behavior,
         kwargs_tools_behavior=kwargs_tools_behavior,
     )

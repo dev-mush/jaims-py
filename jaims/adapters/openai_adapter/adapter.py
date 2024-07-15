@@ -251,8 +251,13 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
                 for tool_call in message.tool_calls:
                     parsed.append(tool_call.tool_name + json.dumps(tool_call.tool_args))
 
-            if message.tool_response:
-                parsed.append(message.tool_response.response)
+            if message.tool_responses:
+                for tool_response in message.tool_responses:
+                    parsed.append(
+                        tool_response.tool_name
+                        + tool_response.tool_call_id
+                        + json.dumps(tool_response.response),
+                    )
 
         image_tokens = 0
         for image in images:
@@ -436,15 +441,16 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         raw_messages = []
         for m in messages:
-            if m.tool_response:
-                raw_messages.append(
-                    {
-                        "role": "tool",
-                        "name": m.tool_response.tool_name,
-                        "tool_call_id": m.tool_response.tool_call_id,
-                        "content": json.dumps(m.tool_response.response),
-                    }
-                )
+            if m.tool_responses:
+                for tr in m.tool_responses:
+                    raw_messages.append(
+                        {
+                            "role": "tool",
+                            "name": tr.tool_name,
+                            "tool_call_id": tr.tool_call_id,
+                            "content": json.dumps(tr.response),
+                        }
+                    )
                 continue
 
             if m.tool_calls:

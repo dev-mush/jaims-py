@@ -129,15 +129,16 @@ class JAImsGoogleGenerativeAIAdapter(JAImsLLMInterface):
                         else:
                             raise ValueError("Invalid image content type")
 
-            if jaims_message.tool_response:
-                parts.append(
-                    glm.Part(
-                        function_response=glm.FunctionResponse(
-                            name=jaims_message.tool_response.tool_name,
-                            response={"result": jaims_message.tool_response.response},
+            if jaims_message.tool_responses:
+                for tr in jaims_message.tool_responses:
+                    parts.append(
+                        glm.Part(
+                            function_response=glm.FunctionResponse(
+                                name=tr.tool_name,
+                                response={"result": tr.response},
+                            )
                         )
                     )
-                )
 
             if jaims_message.tool_calls:
                 for tool_call in jaims_message.tool_calls:

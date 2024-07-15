@@ -138,8 +138,18 @@ class JAImsAgent:
                 tool_manager=tool_manager,
                 tools=tools,
             )
-        else:
-            raise ValueError("Provider is not supported.")
+        elif provider == "anthropic":
+            from .factories import anthropic_factory
+
+            return anthropic_factory(
+                model=model,
+                api_key=api_key,
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
 
     def __update_session(self, session_messages: List[JAImsMessage]):
         self.__session_iteration += 1

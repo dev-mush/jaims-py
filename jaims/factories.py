@@ -155,3 +155,50 @@ def mistral_factory(
         tool_manager=tool_manager,
         tools=tools,
     )
+
+
+def anthropic_factory(
+    model: str,
+    api_key: Optional[str] = None,
+    options: Optional[JAImsOptions] = None,
+    config: Optional[JAImsLLMConfig] = None,
+    history_manager: Optional[JAImsHistoryManager] = None,
+    tool_manager: Optional[JAImsToolManager] = None,
+    tools: Optional[List[JAImsFunctionTool]] = None,
+) -> JAImsAgent:
+    """
+    Factory function to create an instance of JAImsAgent using Anthropic as the underlying model.
+
+    Args:
+        model (str): The name or identifier of the OpenAI model to use.
+        api_key (Optional[str]): The API key for accessing the OpenAI service. Defaults to None.
+        options (Optional[JAImsOptions]): Additional options for configuring the JAImsAgent. Defaults to None.
+        config (Optional[JAImsLLMConfig]): Configuration options specific to the OpenAI language model. Defaults to None.
+        history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
+        tool_manager (Optional[JAImsToolManager]): The tool manager to use for managing JAImsFunctionTools. Defaults to None.
+        tools (Optional[List[JAImsFunctionTool]]): The list of JAImsFunctionTools to use. Defaults to None.
+
+    Returns:
+        JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
+
+    """
+    from .adapters.anthropic_adapter import create_jaims_anthropic
+    from .adapters.anthropic_adapter import JAImsAnthropicKWArgs
+
+    config = config or JAImsLLMConfig()
+    options = options or JAImsOptions()
+
+    kwargs = JAImsAnthropicKWArgs().copy_with_overrides(
+        model=model,
+        temperature=config.temperature,
+        max_tokens=config.max_tokens,
+    )
+
+    return create_jaims_anthropic(
+        api_key=api_key,
+        options=options,
+        kwargs=kwargs,
+        history_manager=history_manager,
+        tool_manager=tool_manager,
+        tools=tools,
+    )

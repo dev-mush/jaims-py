@@ -1,16 +1,12 @@
 from .adapter import (
     JAImsAnthropicKWArgs,
-    JAImsTokenHistoryOptimizer,
-    OpenAITransactionStorageInterface,
     JAImsAnthropicAdapter,
 )
 
-from .factory import create_jaims_openai
+from .factory import create_jaims_anthropic
 
 __all__ = [
     "JAImsAnthropicKWArgs",
-    "create_jaims_openai",
-    "JAImsTokenHistoryOptimizer",
-    "OpenAITransactionStorageInterface",
+    "create_jaims_anthropic",
     "JAImsAnthropicAdapter",
 ]
