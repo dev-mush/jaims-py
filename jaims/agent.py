@@ -22,8 +22,17 @@ from jaims.entities import (
     JAImsOptions,
 )
 
-supported_providers_list = ["openai", "google", "mistral", "anthropic", "vertex"]
-SUPPORTED_PROVIDERS = Literal["openai", "google", "mistral", "anthropic", "vertex"]
+supported_providers_list = [
+    "openai",
+    "google",
+    "mistral",
+    "anthropic",
+    "vertex",
+    "bedrock",
+]
+SUPPORTED_PROVIDERS = Literal[
+    "openai", "google", "mistral", "anthropic", "vertex", "bedrock"
+]
 
 
 class JAImsAgent:
@@ -152,12 +161,36 @@ class JAImsAgent:
             )
 
         elif provider == "vertex":
+            if "claude" not in model:
+                raise ValueError(
+                    "The vertex provider is only available for anthropic models for now."
+                )
+
             from .factories import anthropic_factory
 
             return anthropic_factory(
                 model=model,
                 api_key=api_key,
                 provider="vertex",
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
+
+        elif provider == "bedrock":
+            if "claude" not in model:
+                raise ValueError(
+                    "The bedrock provider is only available for anthropic models for now."
+                )
+
+            from .factories import anthropic_factory
+
+            return anthropic_factory(
+                model=model,
+                api_key=api_key,
+                provider="bedrock",
                 options=options,
                 config=config,
                 history_manager=history_manager,
@@ -263,7 +296,9 @@ class JAImsAgent:
     @staticmethod
     def run_model(
         model: str,
-        provider: Literal["openai", "google", "mistral", "anthropic", "vertex"],
+        provider: Literal[
+            "openai", "google", "mistral", "anthropic", "vertex", "bedrock"
+        ],
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         tools_constraints: Optional[List[str]] = None,

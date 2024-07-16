@@ -21,6 +21,10 @@ with open("requirements-anthropic.txt") as f:
 with open("requirements-anthropic-vertex.txt") as f:
     requirements_anthropic_vertex = f.read().splitlines()
 
+with open("requirements-anthropic-bedrock.txt") as f:
+    requirements_anthropic_bedrock = f.read().splitlines()
+
+
 setup(
     name="jaims-py",
     version="2.0.0-beta.15",
@@ -38,11 +42,16 @@ setup(
         "google": requirements_google_ai,
         "mistral": requirements_mistral,
         "anthropic": requirements_anthropic,
-        "anthropicvertex": requirements_anthropic_vertex,
+        "anthropic-vertex": requirements_anthropic_vertex,
+        "anthropic-bedrock": requirements_anthropic_bedrock,
+        "anthropic-all": requirements_anthropic
+        + requirements_anthropic_vertex
+        + requirements_anthropic_bedrock,
         "all": requirements_openai
         + requirements_google_ai
         + requirements_mistral
         + requirements_anthropic
-        + requirements_anthropic_vertex,
+        + requirements_anthropic_vertex
+        + requirements_anthropic_bedrock,
     },
 )

@@ -87,7 +87,7 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         kwargs: Optional[Union[JAImsAnthropicKWArgs, Dict]] = None,
-        provider: Literal["anthropic", "vertex"] = "anthropic",
+        provider: Literal["anthropic", "vertex", "bedrock"] = "anthropic",
         kwargs_messages_behavior: Literal["append", "replace"] = "append",
         kwargs_tools_behavior: Literal["append", "replace"] = "append",
     ):
@@ -174,6 +174,15 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
             )
             response = client.messages.create(**args)
 
+        elif self.provider == "bedrock":
+            from anthropic import AnthropicBedrock
+
+            client = AnthropicBedrock(
+                max_retries=self.options.max_retries,
+                **self.options.platform_specific_options,
+            )
+            response = client.messages.create(**args)
+
         return self.__claude_message_to_jaims_message(response)
 
     def call_streaming(
@@ -196,6 +205,13 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
                 from anthropic import AsyncAnthropicVertex
 
                 client = AsyncAnthropicVertex(
+                    max_retries=self.options.max_retries,
+                    **self.options.platform_specific_options,
+                )
+            elif self.provider == "bedrock":
+                from anthropic import AsyncAnthropicBedrock
+
+                client = AsyncAnthropicBedrock(
                     max_retries=self.options.max_retries,
                     **self.options.platform_specific_options,
                 )

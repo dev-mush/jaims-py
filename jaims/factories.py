@@ -160,7 +160,7 @@ def mistral_factory(
 def anthropic_factory(
     model: str,
     api_key: Optional[str] = None,
-    provider: Literal["anthropic", "vertex"] = "anthropic",
+    provider: Literal["anthropic", "vertex", "bedrock"] = "anthropic",
     options: Optional[JAImsOptions] = None,
     config: Optional[JAImsLLMConfig] = None,
     history_manager: Optional[JAImsHistoryManager] = None,
@@ -173,7 +173,7 @@ def anthropic_factory(
     Args:
         model (str): The name or identifier of the OpenAI model to use.
         api_key (Optional[str]): The API key for accessing the OpenAI service. Defaults to None.
-        provider (Literal["anthropic", "vertex"]): The provider to use for the Anthropic model. Defaults to "anthropic".
+        provider (Literal["anthropic", "vertex", "bedrock"]): The provider to use for the Anthropic model. Defaults to "anthropic".
         options (Optional[JAImsOptions]): Additional options for configuring the JAImsAgent. Defaults to None.
         config (Optional[JAImsLLMConfig]): Configuration options specific to the OpenAI language model. Defaults to None.
         history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
