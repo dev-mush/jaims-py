@@ -263,7 +263,7 @@ class JAImsAgent:
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google", "mistral"]): The provider to use.
+            provider (Literal["openai", "google", "mistral", "anthropic"]): The provider to use.
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
             tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
             tools_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None.
@@ -325,7 +325,7 @@ class JAImsAgent:
     @staticmethod
     def run_tool_model(
         model: str,
-        provider: Literal["openai", "google", "mistral"],
+        provider: SUPPORTED_PROVIDERS,
         descriptor: JAImsFunctionToolDescriptor,
         messages: Optional[List[JAImsMessage]] = None,
         api_key: Optional[str] = None,
@@ -338,7 +338,7 @@ class JAImsAgent:
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google", "mistral"]): The provider to use.
+            provider (Literal["openai", "google", "mistral", "anthropic"]): The provider to use.
             descriptor (JAImsFunctionToolDescriptor): The tool to run.
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
             api_key (Optional[str]): The API key. Defaults to None.

@@ -1,8 +1,7 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
 import asyncio
 import json
-from typing import Any, Generator, Tuple, Union, List, Optional, Dict, Literal
+from typing import Generator, Tuple, Union, List, Optional, Dict, Literal
 from PIL import Image
 
 from anthropic import AsyncAnthropic, Anthropic
@@ -25,7 +24,7 @@ from anthropic.types.message_create_params import (
     ToolChoice,
 )
 
-from ...interfaces import JAImsLLMInterface, JAImsHistoryOptimizer
+from ...interfaces import JAImsLLMInterface
 from ...entities import (
     JAImsImageContent,
     JAImsMessage,
@@ -36,10 +35,6 @@ from ...entities import (
     JAImsOptions,
 )
 from ..shared.image_utilities import image_to_b64
-from ..shared.exponential_backoff_operation import (
-    call_with_exponential_backoff,
-    ErrorHandlingMethod,
-)
 
 import os
 from copy import deepcopy
@@ -53,7 +48,6 @@ class JAImsAnthropicKWArgs:
         temperature: float = 0.7,
         top_p: Optional[float] = None,
         stop_sequences: Optional[List[str]] = None,
-        stream: bool = False,
         metadata: Optional[Dict[str, str]] = None,
         tool_choice: Optional[ToolChoice] = None,
     ):
@@ -62,7 +56,6 @@ class JAImsAnthropicKWArgs:
         self.temperature = temperature
         self.top_p = top_p
         self.stop_sequences = stop_sequences
-        self.stream = stream
         self.metadata = metadata
         self.tool_choice = tool_choice
 
@@ -73,7 +66,6 @@ class JAImsAnthropicKWArgs:
             "temperature": self.temperature,
             "top_p": self.top_p,
             "stop_sequences": self.stop_sequences,
-            "stream": self.stream,
             "metadata": self.metadata,
             "tool_choice": self.tool_choice,
         }
@@ -106,15 +98,12 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
         self.kwargs = kwargs or JAImsAnthropicKWArgs()
         self.kwargs_messages_behavior = kwargs_messages_behavior
         self.kwargs_tools_behavior = kwargs_tools_behavior
-        self.client = AsyncAnthropic(api_key=self.api_key)
 
-    # TODO: add support for tool constraints
     def __get_args(
         self,
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-        stream: bool = False,
     ):
 
         if isinstance(self.kwargs, JAImsAnthropicKWArgs):
@@ -135,7 +124,6 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
                 )
 
         args["messages"] = claude_messages
-        args["stream"] = stream
 
         if sys_message:
             args["system"] = sys_message
@@ -167,23 +155,12 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
     ) -> JAImsMessage:
         args = self.__get_args(messages, tools, tool_constraints)
 
-        def handle_claude_error(error) -> ErrorHandlingMethod:
-            # TODO: Implement error handling
-            return ErrorHandlingMethod.FAIL
-
-        def claude_api_call():
-            client = Anthropic(api_key=self.api_key)
-            response = client.messages.create(**args)
-            return response
-
-        response = call_with_exponential_backoff(
-            claude_api_call,
-            handle_claude_error,
-            self.options,
+        client = Anthropic(
+            api_key=self.api_key,
+            max_retries=self.options.max_retries,
+            **self.options.platform_specific_options,
         )
-
-        if not isinstance(response, Message):
-            raise Exception("Unexpected response from Claude", response)
+        response = client.messages.create(**args)
 
         return self.__claude_message_to_jaims_message(response)
 
@@ -193,33 +170,28 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
         tools: Optional[List[JAImsFunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> Generator[JAImsStreamingMessage, None, None]:
-        args = self.__get_args(messages, tools, tool_constraints, stream=True)
+        args = self.__get_args(messages, tools, tool_constraints)
 
         async def stream_generator():
-            async with self.client.messages.stream(**args) as stream:
-                current_block: Optional[Dict[str, Any]] = None
+            client = AsyncAnthropic(
+                api_key=self.api_key,
+                max_retries=self.options.max_retries,
+                **self.options.platform_specific_options,
+            )
+            async with client.messages.stream(**args) as stream:
 
-                async for event in stream:
-                    if event.type == "content_block_start":
-                        current_block = {"type": event.content_block.type}
-                    elif event.type == "content_block_delta":
-                        if current_block is not None:
-                            if event.delta.type == "text_delta":
-                                if "text" not in current_block:
-                                    current_block["text"] = ""
-                                current_block["text"] += event.delta.text
-                            elif event.delta.type == "tool_calls":
-                                if "tool_calls" not in current_block:
-                                    current_block["tool_calls"] = []
-                                current_block["tool_calls"].extend(
-                                    event.delta.tool_calls
-                                )
-                    elif event.type == "content_block_stop":
-                        if current_block is not None:
-                            yield self.__claude_streaming_block_to_jaims_message(
-                                current_block
-                            )
-                        current_block = None
+                async for text in stream.text_stream:
+                    snapshot = self.__claude_message_to_jaims_message(
+                        stream.current_message_snapshot
+                    )
+                    yield JAImsStreamingMessage(
+                        message=snapshot,
+                        textDelta=text,
+                    )
+
+                message = await stream.get_final_message()
+                final_message = self.__claude_message_to_jaims_message(message)
+                yield JAImsStreamingMessage(message=final_message, textDelta=None)
 
         def sync_generator():
             loop = asyncio.get_event_loop()
@@ -301,9 +273,9 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
 
             if m.role == JAImsMessageRole.SYSTEM:
                 system_message = (
-                    "\n".join(content)
+                    "\n".join(c["text"] for c in content)
                     if system_message is None
-                    else system_message + "\n".join(content)
+                    else system_message + "\n".join(c["text"] for c in content)
                 )
                 continue
 
@@ -353,52 +325,4 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
             contents=contents,
             tool_calls=tool_calls,
             raw=claude_message,
-        )
-
-    def __claude_streaming_block_to_jaims_message(
-        self, block: Dict[str, Any]
-    ) -> JAImsStreamingMessage:
-        role = JAImsMessageRole.ASSISTANT
-        contents = []
-        tool_calls: List[JAImsToolCall] = []
-        text_delta: Optional[str] = None
-
-        if block["type"] == "text":
-            if "text" in block:
-                contents.append(block["text"])
-                text_delta = block["text"]
-        elif block["type"] == "tool_calls":
-            if "tool_calls" in block:
-                for tool_call in block["tool_calls"]:
-                    tool_calls.append(
-                        JAImsToolCall(
-                            id=tool_call.get("id", ""),
-                            tool_name=tool_call.get("name", ""),
-                            tool_args=json.loads(tool_call.get("arguments", "{}")),
-                        )
-                    )
-
-        return JAImsStreamingMessage(
-            message=JAImsMessage(
-                role=role,
-                contents=contents,
-                tool_calls=tool_calls,
-                raw=block,
-            ),
-            textDelta=text_delta,
-        )
-
-    def __get_claude_response(self, claude_args: dict, call_options: JAImsOptions):
-        def handle_claude_error(error) -> ErrorHandlingMethod:
-            # TODO: Implement error handling
-            return ErrorHandlingMethod.FAIL
-
-        async def claude_api_call():
-            response = await self.client.messages.create(**claude_args)
-            return response
-
-        return call_with_exponential_backoff(
-            claude_api_call,
-            handle_claude_error,
-            call_options,
         )

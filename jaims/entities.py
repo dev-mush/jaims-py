@@ -557,6 +557,10 @@ class JAImsModelCode:
     GPT_4_1106_VISION_PREVIEW = "gpt-4-1106-vision-preview"
     GPT_4o = "gpt-4o"
     GPT_4o_2024_05_13 = "gpt-4o-2024-05-13"
+    CLAUDE_3_5_SONNET_20240620 = "claude-3-5-sonnet-20240620"
+    CLAUDE_3_OPUS_20240229 = "claude-3-opus-20240229"
+    CLAUDE_3_SONNET_20240229 = "claude-3-sonnet-20240229"
+    CLAUDE_3_HAIKU_20240307 = "claude-3-haiku-20240307"
 
 
 class JAImsLLMConfig:
@@ -601,6 +605,7 @@ class JAImsOptions:
         exponential_delay (int): The initial delay, in seconds, to multiply by the base for exponential backoff.
         exponential_cap (Optional[int]): The maximum value, in seconds, for exponential backoff delay. Leave None to let it grow indefinitely.
         jitter (bool): Whether to add a small jitter to the delay (to avoid concurrent firing), in case of exponential backoff, in the worst case, it will be 2x the delay.
+        platform_specific_options (Optional[Dict[str, Any]]): Platform-specific options to be passed to the client.
     """
 
     def __init__(
@@ -611,6 +616,7 @@ class JAImsOptions:
         exponential_delay: int = 1,
         exponential_cap: Optional[int] = None,
         jitter: bool = True,
+        platform_specific_options: Optional[Dict[str, Any]] = None,
     ):
         self.max_retries = max_retries
         self.retry_delay = retry_delay
@@ -618,6 +624,7 @@ class JAImsOptions:
         self.exponential_delay = exponential_delay
         self.exponential_cap = exponential_cap
         self.jitter = jitter
+        self.platform_specific_options = platform_specific_options or {}
 
     def copy_with_overrides(
         self,
@@ -627,6 +634,7 @@ class JAImsOptions:
         exponential_delay: Optional[int] = None,
         exponential_cap: Optional[int] = None,
         jitter: Optional[bool] = None,
+        platform_specific_options: Optional[Dict[str, Any]] = None,
     ) -> JAImsOptions:
         """
         Returns a new JAImsOptions instance with the passed parameters overridden.
@@ -644,6 +652,11 @@ class JAImsOptions:
                 exponential_cap if exponential_cap else self.exponential_cap
             ),
             jitter=jitter if jitter else self.jitter,
+            platform_specific_options=(
+                platform_specific_options
+                if platform_specific_options
+                else self.platform_specific_options
+            ),
         )
 
 
