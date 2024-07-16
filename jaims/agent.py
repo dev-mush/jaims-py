@@ -22,8 +22,8 @@ from jaims.entities import (
     JAImsOptions,
 )
 
-supported_providers_list = ["openai", "google", "mistral", "anthropic"]
-SUPPORTED_PROVIDERS = Literal["openai", "google", "mistral", "anthropic"]
+supported_providers_list = ["openai", "google", "mistral", "anthropic", "vertex"]
+SUPPORTED_PROVIDERS = Literal["openai", "google", "mistral", "anthropic", "vertex"]
 
 
 class JAImsAgent:
@@ -151,6 +151,20 @@ class JAImsAgent:
                 tools=tools,
             )
 
+        elif provider == "vertex":
+            from .factories import anthropic_factory
+
+            return anthropic_factory(
+                model=model,
+                api_key=api_key,
+                provider="vertex",
+                options=options,
+                config=config,
+                history_manager=history_manager,
+                tool_manager=tool_manager,
+                tools=tools,
+            )
+
     def __update_session(self, session_messages: List[JAImsMessage]):
         self.__session_iteration += 1
         if self.__session_iteration > self.max_consecutive_tool_calls:
@@ -249,7 +263,7 @@ class JAImsAgent:
     @staticmethod
     def run_model(
         model: str,
-        provider: Literal["openai", "google", "mistral", "anthropic"],
+        provider: Literal["openai", "google", "mistral", "anthropic", "vertex"],
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
         tools_constraints: Optional[List[str]] = None,
@@ -263,7 +277,7 @@ class JAImsAgent:
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google", "mistral", "anthropic"]): The provider to use.
+            provider (Literal["openai", "google", "mistral", "anthropic","vertex"]): The provider to use.
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
             tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
             tools_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None.
@@ -338,7 +352,7 @@ class JAImsAgent:
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google", "mistral", "anthropic"]): The provider to use.
+            provider (Literal["openai", "google", "mistral", "anthropic","vertex"]): The provider to use.
             descriptor (JAImsFunctionToolDescriptor): The tool to run.
             messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
             api_key (Optional[str]): The API key. Defaults to None.

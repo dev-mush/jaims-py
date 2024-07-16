@@ -10,6 +10,7 @@ from .adapter import (
 
 def create_jaims_anthropic(
     api_key: Optional[str] = None,
+    provider: Literal["anthropic", "vertex"] = "anthropic",
     options: Optional[JAImsOptions] = None,
     kwargs: Optional[Union[JAImsAnthropicKWArgs, Dict]] = None,
     history_manager: Optional[JAImsHistoryManager] = None,
@@ -21,6 +22,7 @@ def create_jaims_anthropic(
 
     adapter = JAImsAnthropicAdapter(
         api_key=api_key,
+        provider=provider,
         options=options,
         kwargs=kwargs,
         kwargs_messages_behavior=kwargs_messages_behavior,
