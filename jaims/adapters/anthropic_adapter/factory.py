@@ -16,6 +16,7 @@ def create_jaims_anthropic(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
     kwargs_messages_behavior: Literal["append", "replace"] = "append",
     kwargs_tools_behavior: Literal["append", "replace"] = "append",
 ) -> JAImsAgent:
@@ -34,6 +35,7 @@ def create_jaims_anthropic(
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
 
     return agent

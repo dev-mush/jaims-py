@@ -1,8 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .agent import JAImsAgent
 
 from typing import List
 from jaims.entities import (
@@ -32,7 +30,6 @@ class JAImsDefaultToolManager(JAImsToolManager):
 
     def handle_tool_calls(
         self,
-        agent: JAImsAgent,
         tool_calls: List[JAImsToolCall],
         tools: List[JAImsFunctionTool],
     ) -> List[JAImsToolResponse]:
@@ -42,7 +39,6 @@ class JAImsDefaultToolManager(JAImsToolManager):
         The results of the tools have to be json-serializable in order to be sent as messages.
 
         Args:
-            agent (JAImsAgent): The agent associated with the tool calls.
             tool_calls (List[JAImsToolCall]): The list of tool calls to be executed.
             tools (List[JAImsFunctionTool]): The list of available tools.
 
@@ -74,11 +70,6 @@ class JAImsDefaultToolManager(JAImsToolManager):
                     )
                 )
             except Exception as e:
-                if agent.tool_call_error_behavior == "raise":
-                    raise e
-                if agent.tool_call_error_behavior == "ignore":
-                    continue
-
                 results.append(
                     JAImsToolResponse(
                         tool_call_id=fc.id,

@@ -22,6 +22,9 @@ from examples._examples_utils import FileTransactionStorage
 
 class MyCustomToolManager(JAImsToolManager):
 
+    def __init__(self, agent: JAImsAgent) -> None:
+        self.agent = agent
+
     def handle_tool_calls(
         self,
         agent: JAImsAgent,

@@ -12,7 +12,7 @@ from jaims import (
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def sum(a: int, b: int):
-    print("----performing sum----")
+    print("\n----performing sum----")
     print(a, b)
     print("----------------------")
     return a + b
@@ -23,7 +23,7 @@ def sum(a: int, b: int):
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def multiply(a: int, b: int):
-    print("----performing multiplication----")
+    print("\n----performing multiplication----")
     print(a, b)
     print("----------------------------------")
     return a * b
@@ -33,13 +33,13 @@ def multiply(a: int, b: int):
     description="use this function when the user wants to store the result of an operation",
 )
 def store_result(result: int):
-    print("----storing result----")
+    print("\n----storing result----")
     print(result)
     print("-------------------")
 
 
 def main():
-    stream = False
+    stream = True
     model = "claude-3-5-sonnet-20240620"  # use JAImsModelCode.GPT_4o to avoid typing / remembering the model name
     # model = "gemini-1.5-pro-latest"
     provider = "anthropic"  # either "openai" or "google"

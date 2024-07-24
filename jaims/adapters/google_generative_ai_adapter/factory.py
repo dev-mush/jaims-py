@@ -14,6 +14,7 @@ def create_jaims_gemini(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
 ) -> JAImsAgent:
 
     adapter = JAImsGoogleGenerativeAIAdapter(
@@ -27,6 +28,7 @@ def create_jaims_gemini(
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
 
     return agent

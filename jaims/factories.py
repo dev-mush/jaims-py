@@ -16,6 +16,7 @@ def openai_factory(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
 ) -> JAImsAgent:
     """
     Factory function to create an instance of JAImsAgent using OpenAI as the underlying model.
@@ -28,6 +29,7 @@ def openai_factory(
         history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
         tool_manager (Optional[JAImsToolManager]): The tool manager to use for managing JAImsFunctionTools. Defaults to None.
         tools (Optional[List[JAImsFunctionTool]]): The list of JAImsFunctionTools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): An optional list of tool constraints. Defaults to None.
 
     Returns:
         JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
@@ -55,6 +57,7 @@ def openai_factory(
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
 
 
@@ -66,6 +69,7 @@ def google_factory(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
 ) -> JAImsAgent:
     """
     Factory function to create an instance of JAImsAgent using Google Gemini as the underlying model.
@@ -78,6 +82,7 @@ def google_factory(
         history_manager (Optional[JAImsHistoryManager]): History manager for the JAImsAgent (default: None).
         tool_manager (Optional[JAImsToolManager]): Tool manager for the JAImsAgent (default: None).
         tools (Optional[List[JAImsFunctionTool]]): List of function tools for the JAImsAgent (default: None).
+        tool_constraints (Optional[List[str]]): List of tool constraints for the JAImsAgent (default: None).
 
     Returns:
         JAImsAgent: An instance of JAImsAgent configured for Google models.
@@ -104,6 +109,7 @@ def google_factory(
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
 
 
@@ -115,6 +121,7 @@ def mistral_factory(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
 ) -> JAImsAgent:
     """
     Factory function to create an instance of JAImsAgent using Mistral as the underlying model.
@@ -127,6 +134,7 @@ def mistral_factory(
         history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
         tool_manager (Optional[JAImsToolManager]): The tool manager to use for managing JAImsFunctionTools. Defaults to None.
         tools (Optional[List[JAImsFunctionTool]]): The list of JAImsFunctionTools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): An optional list of tool constraints. Defaults to None.
 
     Returns:
         JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
@@ -154,6 +162,7 @@ def mistral_factory(
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
 
 
@@ -166,6 +175,7 @@ def anthropic_factory(
     history_manager: Optional[JAImsHistoryManager] = None,
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
 ) -> JAImsAgent:
     """
     Factory function to create an instance of JAImsAgent using Anthropic as the underlying model.
@@ -179,6 +189,7 @@ def anthropic_factory(
         history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
         tool_manager (Optional[JAImsToolManager]): The tool manager to use for managing JAImsFunctionTools. Defaults to None.
         tools (Optional[List[JAImsFunctionTool]]): The list of JAImsFunctionTools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): An optional list of tool constraints. Defaults to None.
 
     Returns:
         JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
@@ -204,4 +215,5 @@ def anthropic_factory(
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )

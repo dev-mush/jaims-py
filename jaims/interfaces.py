@@ -148,7 +148,6 @@ class JAImsToolManager(ABC):
     @abstractmethod
     def handle_tool_calls(
         self,
-        agent: JAImsAgent,
         tool_calls: List[JAImsToolCall],
         tools: List[JAImsFunctionTool],
     ) -> List[JAImsToolResponse]:
