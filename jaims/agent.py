@@ -303,24 +303,35 @@ class JAImsAgent:
             )
 
         elif provider == "vertex":
-            if "claude" not in model:
-                raise ValueError(
-                    "The vertex provider is only available for anthropic models for now."
+            if "claude" in model:
+
+                from .factories import anthropic_factory
+
+                return anthropic_factory(
+                    model=model,
+                    api_key=api_key,
+                    provider="vertex",
+                    options=options,
+                    config=config,
+                    history_manager=history_manager,
+                    tool_manager=tool_manager,
+                    tools=tools,
+                    tool_constraints=tool_constraints,
                 )
 
-            from .factories import anthropic_factory
+            else:
+                from .factories import vertex_ai_factory
 
-            return anthropic_factory(
-                model=model,
-                api_key=api_key,
-                provider="vertex",
-                options=options,
-                config=config,
-                history_manager=history_manager,
-                tool_manager=tool_manager,
-                tools=tools,
-                tool_constraints=tool_constraints,
-            )
+                return vertex_ai_factory(
+                    model=model,
+                    api_key=api_key,
+                    options=options,
+                    config=config,
+                    history_manager=history_manager,
+                    tool_manager=tool_manager,
+                    tools=tools,
+                    tool_constraints=tool_constraints,
+                )
 
     def run(
         self,

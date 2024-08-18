@@ -220,3 +220,67 @@ def anthropic_factory(
         tools=tools,
         tool_constraints=tool_constraints,
     )
+
+
+def vertex_ai_factory(
+    model: str,
+    api_key: Optional[str] = None,
+    options: Optional[JAImsOptions] = None,
+    config: Optional[JAImsLLMConfig] = None,
+    history_manager: Optional[JAImsHistoryManager] = None,
+    tool_manager: Optional[JAImsToolManager] = None,
+    tools: Optional[List[JAImsFunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
+) -> JAImsAgent:
+    """
+    Factory function to create an instance of JAImsAgent using Google Gemini as the underlying model.
+
+    Args:
+        model (str): The name or ID of the Google model to use.
+        api_key (Optional[str]): The API key for accessing the Google model (default: None).
+        options (Optional[JAImsOptions]): Additional options for the JAImsAgent (default: None).
+        config (Optional[JAImsLLMConfig]): Configuration for the JAImsLLM model (default: None).
+        history_manager (Optional[JAImsHistoryManager]): History manager for the JAImsAgent (default: None).
+        tool_manager (Optional[JAImsToolManager]): Tool manager for the JAImsAgent (default: None).
+        tools (Optional[List[JAImsFunctionTool]]): List of function tools for the JAImsAgent (default: None).
+        tool_constraints (Optional[List[str]]): List of tool constraints for the JAImsAgent (default: None).
+
+    Returns:
+        JAImsAgent: An instance of JAImsAgent configured for Google models.
+    """
+
+    from .adapters.vertexai_adapter.factory import (
+        create_jaims_vertex,
+        GenerationConfig,
+    )
+
+    if not options:
+        raise ValueError("pass project_id and location in options")
+
+    if options.platform_specific_options["project_id"] is None:
+        raise ValueError("project_id is required in options")
+
+    if options.platform_specific_options["location"] is None:
+        raise ValueError("location is required in options")
+
+    project_id = options.platform_specific_options["project_id"]
+    location = options.platform_specific_options["location"]
+
+    config = config or JAImsLLMConfig()
+
+    generation_config = GenerationConfig(
+        temperature=config.temperature,
+        max_output_tokens=config.max_tokens,
+        response_schema=config.response_format,
+    )
+
+    return create_jaims_vertex(
+        model_name=model,
+        project_id=project_id,
+        location=location,
+        generation_config=generation_config,
+        history_manager=history_manager,
+        tool_manager=tool_manager,
+        tools=tools,
+        tool_constraints=tool_constraints,
+    )
