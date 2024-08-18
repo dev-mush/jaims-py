@@ -29,10 +29,14 @@ supported_providers_list = [
     "mistral",
     "anthropic",
     "vertex",
-    "bedrock",
 ]
+
 SUPPORTED_PROVIDERS = Literal[
-    "openai", "google", "mistral", "anthropic", "vertex", "bedrock"
+    "openai",
+    "google",
+    "mistral",
+    "anthropic",
+    "vertex",
 ]
 
 
@@ -318,26 +322,6 @@ class JAImsAgent:
                 tool_constraints=tool_constraints,
             )
 
-        elif provider == "bedrock":
-            if "claude" not in model:
-                raise ValueError(
-                    "The bedrock provider is only available for anthropic models for now."
-                )
-
-            from .factories import anthropic_factory
-
-            return anthropic_factory(
-                model=model,
-                api_key=api_key,
-                provider="bedrock",
-                options=options,
-                config=config,
-                history_manager=history_manager,
-                tool_manager=tool_manager,
-                tools=tools,
-                tool_constraints=tool_constraints,
-            )
-
     def run(
         self,
         messages: Optional[List[JAImsMessage]] = None,
@@ -389,7 +373,11 @@ class JAImsAgent:
     def run_model(
         model: str,
         provider: Literal[
-            "openai", "google", "mistral", "anthropic", "vertex", "bedrock"
+            "openai",
+            "google",
+            "mistral",
+            "anthropic",
+            "vertex",
         ],
         messages: Optional[List[JAImsMessage]] = None,
         tools: Optional[List[JAImsFunctionTool]] = None,
