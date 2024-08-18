@@ -21,6 +21,9 @@ with open("requirements-anthropic.txt") as f:
 with open("requirements-anthropic-vertex.txt") as f:
     requirements_anthropic_vertex = f.read().splitlines()
 
+with open("requirements-vertexai.txt") as f:
+    requirements_vertexai = f.read().splitlines()
+
 
 setup(
     name="jaims-py",
@@ -37,12 +40,14 @@ setup(
     extras_require={
         "openai": requirements_openai,
         "google": requirements_google_ai,
+        "vertexai": requirements_vertexai,
         "mistral": requirements_mistral,
         "anthropic": requirements_anthropic,
         "anthropic-vertex": requirements_anthropic_vertex,
         "anthropic-all": requirements_anthropic + requirements_anthropic_vertex,
         "all": requirements_openai
         + requirements_google_ai
+        + requirements_vertexai
         + requirements_mistral
         + requirements_anthropic
         + requirements_anthropic_vertex,

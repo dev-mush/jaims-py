@@ -145,7 +145,10 @@ class JAImsMessage:
             if isinstance(content, str):
                 all_text += content
 
-        return all_text or None
+        if all_text:
+            return all_text
+
+        return None
 
     # -------------------------
     # convenience constructors
