@@ -3,6 +3,7 @@ from jaims import (
     JAImsDefaultHistoryManager,
     JAImsMessage,
     JAImsLLMConfig,
+    JAImsOptions,
     jaimsfunctiontool,
 )
 
@@ -40,14 +41,18 @@ def store_result(result: int):
 
 def main():
     stream = True
-    model = "claude-3-5-sonnet-20240620"  # use JAImsModelCode.GPT_4o to avoid typing / remembering the model name
-    # model = "gemini-1.5-pro-latest"
-    provider = "anthropic"  # either "openai" or "google"
-    # provider = "google"
+    model = "gemini-1.5-pro"
+    provider = "vertex"  # either "openai" or "google"
 
     agent = JAImsAgent.build(
         model=model,
         provider=provider,
+        options=JAImsOptions(
+            platform_specific_options={
+                "project_id": "your-project-id",
+                "location": "europe-west1",
+            }
+        ),
         config=JAImsLLMConfig(
             temperature=0.5,
             max_tokens=2000,

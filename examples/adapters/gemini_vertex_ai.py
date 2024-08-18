@@ -64,7 +64,7 @@ def main():
 
     agent = create_jaims_vertex(
         model_name="gemini-1.5-pro",
-        project_id="ufirst-internal",
+        project_id="your-project-id",
         location="europe-west1",
         history_manager=history_manager,
         tools=[sum, multiply, store_sum, store_multiply],
