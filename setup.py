@@ -27,7 +27,7 @@ with open("requirements-vertexai.txt") as f:
 
 setup(
     name="jaims-py",
-    version="2.0.0-beta.16",
+    version="2.0.0-beta.17",
     packages=find_packages(),
     description="A Python package for creating LLM powered, agentic, platform agnostic software.",
     long_description=open("README.md").read(),
