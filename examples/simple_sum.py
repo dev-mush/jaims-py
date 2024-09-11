@@ -121,7 +121,7 @@ def main():
 
     agent = JAImsAgent(
         openai_kwargs=JAImsOpenaiKWArgs(
-            model=JAImsGPTModel.GPT_4_1106_PREVIEW,
+            model=JAImsGPTModel.GPT_4_o_mini,
             stream=stream,
             tools=[
                 sum_func_wrapper,

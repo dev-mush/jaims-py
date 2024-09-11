@@ -20,28 +20,21 @@ MAX_CONSECUTIVE_CALLS = 10
 class JAImsGPTModel(Enum):
     """
     The OPENAI GPT models available.
-    Only those that support functions are listed, so just:
-    gpt-3.5-turbo-0613, gpt-3-5-turbo-16k-0613, gpt-4-0613
     """
 
-    GPT_3_5_TURBO = ("gpt-3.5-turbo", 4096, 0.0015, 0.002)
-    GPT_3_5_TURBO_16K = ("gpt-3.5-turbo-16k", 16384, 0.003, 0.004)
-    GPT_3_5_TURBO_0613 = ("gpt-3.5-turbo-0613", 4096, 0.0015, 0.002)
-    GPT_3_5_TURBO_16K_0613 = ("gpt-3.5-turbo-16k-0613", 16384, 0.003, 0.004)
-    GPT_3_5_TURBO_1106 = ("gpt-3.5-turbo-1106", 16385, 0.001, 0.002)
-    GPT_4 = ("gpt-4", 8192, 0.03, 0.06)
-    GPT_4_32K = ("gpt-4-32k", 32768, 0.06, 0.12)
-    GPT_4_0613 = ("gpt-4-0613", 8192, 0.03, 0.06)
-    GPT_4_32K_0613 = ("gpt-4-32k-0613", 32768, 0.06, 0.12)
-    GPT_4_1106_PREVIEW = ("gpt-4-1106-preview", 128000, 0.01, 0.03)
-    GPT_4_0125_PREVIEW = ("gpt-4-0125-preview", 128000, 0.01, 0.03)
-    GPT_4_TURBO = ("gpt-4-turbo", 128000, 0.0, 0.0)
-    GPT_4_TURBO_PREVIEW = ("gpt-4-turbo-preview", 128000, 0.0, 0.0)
     GPT_4_o = ("gpt-4o", 1280000, 0.00, 0.0)
     GPT_4_o_2024_05_13 = ("gpt-4o-2024-05-13", 1280000, 0.00, 0.0)
-    GPT_4_TURBO_2024_04_09 = ("gpt-4-turbo-2024-04-09", 128000, 0.01, 0.03)
-    GPT_4_1106_VISION_PREVIEW = ("gpt-4-1106-vision-preview", 128000, 0.01, 0.03)
-    GPT_4_VISION_PREVIEW = ("gpt-4-vision-preview", 128000, 0.01, 0.03)
+    GPT_4_o_2024_08_06 = ("gpt-4o-2024-08-06", 1280000, 0.00, 0.0)
+    GPT_4_o_mini = ("gpt-4o-mini", 1280000, 0.00, 0.0)
+    GPT_4_o_mini_2024_07_18 = ("gpt-4o-mini-2024-07-18", 1280000, 0.00, 0.0)
+    GPT_4_turbo = ("gpt-4-turbo", 1280000, 0.00, 0.0)
+    GPT_4_turbo_2024_04_09 = ("gpt-4-turbo-2024-04-09", 1280000, 0.00, 0.0)
+    GPT_4_turbo_preview = ("gpt-4-turbo-preview", 1280000, 0.00, 0.0)
+    GPT_4_0125_preview = ("gpt-4-0125-preview", 1280000, 0.00, 0.0)
+    GPT_4_1106_preview = ("gpt-4-1106-preview", 1280000, 0.00, 0.0)
+    GPT_4 = ("gpt-4", 8192, 0.00, 0.0)
+    GPT_4_0613 = ("gpt-4-0613", 8192, 0.00, 0.0)
+    GPT_4_0314 = ("gpt-4-0314", 8192, 0.00, 0.0)
 
     def __init__(self, string, max_tokens, price_1k_tokens_in, price_1k_tokens_out):
         self.string = string
@@ -162,7 +155,7 @@ class JAImsOpenaiKWArgs:
     (https://platform.openai.com/docs/api-reference/chat/create).
 
     Args:
-        model (JAImsGPTModel, optional): The OpenAI model to use. Defaults to JAImsGPTModel.GPT_3_5_TURBO.
+        model (JAImsGPTModel, optional): The OpenAI model to use. Defaults to JAImsGPTModel.GPT_4_o_mini.
         messages (List[dict], optional): The list of messages for the conversation. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them.
         max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 500.
         stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
@@ -181,7 +174,7 @@ class JAImsOpenaiKWArgs:
 
     def __init__(
         self,
-        model: JAImsGPTModel = JAImsGPTModel.GPT_3_5_TURBO,
+        model: JAImsGPTModel = JAImsGPTModel.GPT_4_o_mini,
         messages: List[dict] = [],
         max_tokens: int = DEFAULT_MAX_TOKENS,
         stream: bool = False,

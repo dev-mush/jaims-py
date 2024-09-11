@@ -80,7 +80,7 @@ def main():
 
     agent = JAImsAgent(
         openai_kwargs=JAImsOpenaiKWArgs(
-            model=JAImsGPTModel.GPT_3_5_TURBO_0613,
+            model=JAImsGPTModel.GPT_4_o_mini,
             tools=[people_func_wrapper],
             stream=stream,
         ),
