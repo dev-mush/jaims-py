@@ -2,53 +2,51 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .agent import JAImsAgent
+    from .agent import Agent
 
 from abc import ABC, abstractmethod
 from typing import List, Generator, Optional
 
 
 from jaims.entities import (
-    JAImsMessage,
-    JAImsStreamingMessage,
-    JAImsToolCall,
-    JAImsFunctionTool,
-    JAImsToolResponse,
+    Message,
+    StreamingMessage,
+    ToolCall,
+    FunctionTool,
+    ToolResponse,
 )
 
 
-class JAImsLLMInterface(ABC):
+class LLMAdapterITF(ABC):
     """
-    Abstract base class for JAImsLLMInterface.
+    Interface of a LLM Adapter.
 
-    This class defines the interface for a JAIms LLM (Language Learning Model) interface.
-    Subclasses of this class must implement the `call` and `call_streaming` methods.
-
-    Attributes:
-        None
+    Implement this interface to create a custom adapter for a Language Learning Model (LLM) to be used by the JAIms Agent.
 
     Methods:
-        call: Executes the language learning model on a list of messages and tools.
-        call_streaming: Executes the language learning model on a list of messages and tools in a streaming fashion.
+        call: Invoked by the Agent instance to call the LLM with a list of messages, tools and tool constraints, returns the output message.
+        call_streaming: Invoked by the Agent instance to call the LLM with a list of messages, tools and tool constraints, returns a generator of streaming messages.
     """
 
     @abstractmethod
     def call(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> JAImsMessage:
+    ) -> Message:
         """
         Executes the language learning model on a list of messages and tools.
 
+        Override this method to implement the logic for calling the LLM with a list of messages and tools.
+
         Args:
-            messages: A list of JAImsMessage objects representing the input messages. Defaults to None.
-            tools: A list of JAImsFunctionTool objects representing the tools to be applied. Defaults to None.
+            messages: A list of Message objects representing the input messages to be sent to the LLM. Defaults to None.
+            tools: A list of FunctionTool objects representing the tools to be applied. Defaults to None.
             tool_constraints: An optional list of tool constraints. Defaults to None.
 
         Returns:
-            A JAImsMessage object representing the output message.
+            A Message object representing the output message from the LLM.
 
         Raises:
             NotImplementedError: If the method is not implemented by the subclass.
@@ -58,111 +56,112 @@ class JAImsLLMInterface(ABC):
     @abstractmethod
     def call_streaming(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[JAImsStreamingMessage, None, None]:
+    ) -> Generator[StreamingMessage, None, None]:
         """
-        Executes the language learning model on a list of messages and tools in a streaming fashion.
+        Executes the language learning model on a list of messages and tools, returning a generator of streaming messages.
+
+        Override this method to implement the logic for calling the LLM with a list of messages and tools, returning a generator of streaming messages.
 
         Args:
-            messages: A list of JAImsMessage objects representing the input messages. Defaults to None.
-            tools: A list of JAImsFunctionTool objects representing the tools to be applied. Defaults to None.
+            messages: A list of Message objects representing the input messages to be sent to the LLM. Defaults to None.
+            tools: A list of FunctionTool objects representing the tools to be applied. Defaults to None.
             tool_constraints: An optional list of tool constraints. Defaults to None.
 
-        Yields:
-            A JAImsStreamingMessage object representing the output message.
-
-        Raises:
-            NotImplementedError: If the method is not implemented by the subclass.
-        """
-        raise NotImplementedError
-
-
-class JAImsHistoryOptimizer(ABC):
-    """
-    Abstract base class for a history optimizer supported by the Default JAImsHistoryManager.
-
-    Override this class to implement custom history optimization logic (e.g., reducing messages based on token consideration, timestamps, etc.).
-    """
-
-    @abstractmethod
-    def optimize_history(self, messages: List[JAImsMessage]) -> List[JAImsMessage]:
-        """
-        Optimize the given list of JAIms messages.
-
-        Parameters:
-        - messages (List[JAImsMessage]): The list of JAIms messages to optimize.
-
         Returns:
-        - List[JAImsMessage]: The optimized list of JAIms messages.
+            A generator of StreamingMessage objects representing the output messages from the LLM.
         """
         raise NotImplementedError
 
 
-class JAImsHistoryManager(ABC):
+class HistoryOptimizerITF(ABC):
     """
-    Abstract base class for managing the history of JAIms messages.
+    Interface of a history optimizer supported by the Default HistoryManager.
 
-    The intended use, when implementing it is to use the add_messages method to push messages in the conversation history, and the get_messages method to retrieve the messages intended to be sent to the LLM when it is invoked. Ideally you might want to send just a slice of the conversation history to the LLM, and not the entire history, to lower token consumption.
+    Implement this interface for custom history optimization logic (e.g., reducing messages based on token consideration, timestamps, etc.).
+
+    Methods:
+        optimize_history: Receives the entire history and returns the sublist based on optimization logic.
     """
 
     @abstractmethod
-    def add_messages(self, messages: List[JAImsMessage]):
+    def optimize_history(self, messages: List[Message]) -> List[Message]:
         """
-        Adds a list of JAIms messages to the history.
+        Optimizes the history based on the optimization logic.
 
         Args:
-            messages (List[JAImsMessage]): The list of JAIms messages to add.
+            messages (List[Message]): The entire history to be optimized.
+
+        Returns:
+            List[Message]: The optimized history based on the optimization logic.
+        """
+        raise NotImplementedError
+
+
+class HistoryManagerITF(ABC):
+    """
+    Interface of a History Manager.
+
+    Implement this interface to create a custom history manager for the JAIms Agent.
+
+    Methods:
+        add_messages: Adds a list of JAIms messages to the history.
+        get_messages: Retrieves the list of JAIms messages intended to be sent, at a specific invocation, to the LLM.
+    """
+
+    @abstractmethod
+    def add_messages(self, messages: List[Message]):
+        """
+        Adds a list of messages to the history.
+
+        Override this method to implement the logic for adding a list of messages to the history. This method is invoked by the Agent instance when a run method is called.
+
+        Args:
+            messages (List[Message]): The list of messages to add to the history.
         """
         raise NotImplementedError
 
     @abstractmethod
-    def get_messages(self) -> List[JAImsMessage]:
+    def get_messages(self) -> List[Message]:
         """
-        Retrieves the list of JAIms messages intended to be sent, at a specific invocation, to the LLM.
+        Returns the list of messages to be sent to the LLM at a given invocation.
 
-        In other words this method should return "a slice" of the conversation history when the user sends a message.
+        Override this method to implement the logic for retrieving the list of messages to be sent to the LLM at a given invocation. This method is invoked by the Agent instance when a run method is called.
 
         Returns:
-            List[JAImsMessage]: The list of JAIms messages.
+            List[Message]: The list of messages to be sent to the LLM at a given invocation.
         """
         raise NotImplementedError
 
 
-class JAImsToolManager(ABC):
+class ToolManagerITF(ABC):
     """
-    Abstract base class for managing JAIms tools.
+    Interface of a Tool Manager.
 
-    This class defines the interface for handling tool calls in JAIms.
+    Usually you don't need to implement this class because it is the core of this library, but in case you need to implement your own logic for handling tool calls, you can do it by subclassing this class.
 
-    Attributes:
-        agent (JAImsAgent): The JAIms agent associated with the tool calls.
-        tool_calls (List[JAImsToolCall]): List of tool calls.
-        tools (List[JAImsFunctionTool]): List of available tools.
-
-    Returns:
-        List[JAImsMessage]: List of messages generated by the tool calls.
+    Methods:
+        handle_tool_calls: Called by the agent to execute the tool calls and format the results as messages to be consumed by the LLM.
     """
 
     @abstractmethod
     def handle_tool_calls(
         self,
-        tool_calls: List[JAImsToolCall],
-        tools: List[JAImsFunctionTool],
-    ) -> List[JAImsToolResponse]:
+        tool_calls: List[ToolCall],
+        tools: List[FunctionTool],
+    ) -> List[ToolResponse]:
         """
-        Handle tool calls in JAIms.
+        Handles the tool calls with on the available FunctionTools.
 
-        This method should be implemented by subclasses to handle the tool calls.
-        The list of tool calls represents a request by the LLM to execute a set of tools, the tools are the actual function wrappers that should be executed.
+        When overriding this method, usually you want to inspect the id of the incoming tool_calls, and check them against the avialable tools (if any). Then for each tool call, you will return the corresponding ToolResponse.
 
         Args:
-            agent (JAImsAgent): The JAIms agent.
-            tool_calls (List[JAImsToolCall]): List of tool calls requested by the LLM.
-            tools (List[JAImsFunctionTool]): List of available tools.
+            tool_calls (List[ToolCall]): List of tool calls to be executed.
+            tools (List[FunctionTool]): List of available FunctionTools.
 
         Returns:
-            List[JAImsToolResponse]: List of tool responses generated by the tool calls.
+            List[ToolResponse]: List of ToolResponse objects representing the results of the tool calls.
         """
         raise NotImplementedError

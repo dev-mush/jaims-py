@@ -1,8 +1,18 @@
 from __future__ import annotations
 
 from enum import Enum
-import json
-from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union, Generic
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    Generic,
+)
+from typing_extensions import deprecated
 from PIL import Image
 from pydantic import BaseModel
 import functools
@@ -13,7 +23,7 @@ import jsonref
 # -------------------------
 
 
-class JAImsToolCall:
+class ToolCall:
     """
     Models a tool call requrested by an LLM.
 
@@ -31,9 +41,14 @@ class JAImsToolCall:
         self.tool_args = tool_args
 
 
-class JAImsToolResponse:
+@deprecated("use ToolCall instead.")
+class JAImsToolCall(ToolCall):
+    pass
+
+
+class ToolResponse:
     """
-    Models a response from a JAImsToolCall.
+    Models a response from a ToolCall.
 
     In case of parallel tool calls, the response is associated with the tool call ID.
 
@@ -53,34 +68,40 @@ class JAImsToolResponse:
         self.is_error = is_error
 
 
-JAImsImageContentType = Union[str, Image.Image]
+@deprecated("use ToolResponse instead.")
+class JAImsToolResponse(ToolResponse):
+    pass
 
 
-class JAImsImageContent:
+ImageContentType = Union[str, Image.Image]
+
+
+class ImageContent:
     """
     Models an image content for a message that contains an image.
 
     It can be either a PIL Image object or a URL to the image.
 
     Attributes:
-        image (JAImsImageContentType): The image content.
+        image (ImageContentType): The image content.
     """
 
-    def __init__(self, image: JAImsImageContentType):
+    def __init__(self, image: ImageContentType):
         self.image = image
 
 
-JAImsContentType = Union[JAImsImageContent, str]
+ContentType = Union[ImageContent, str]
 
 
-class JAImsMessageRole(Enum):
+class MessageRole(Enum):
     """
-    Represents the roles of a JAImsMessage.
+    Represents the roles of a Message sent and received by an LLM.
 
     Roles have different meanings depending on the LLM used, this is an abstraction over the most common approaches.
     It is mapped back by the adapter to the appropriate role based on the LLM implementation.
 
-    The JAImsMessageRole enum defines the different roles that a message can have in the JAIms system.
+    The MessageRole enum defines the different roles that a message can have in the JAIms domain. Meaning and usage may vary depending on the adapter being used.
+
     The available roles are:
     - USER: Represents a message sent by a user.
     - ASSISTANT: Represents a message sent by the assistant.
@@ -94,7 +115,7 @@ class JAImsMessageRole(Enum):
     SYSTEM = "system"
 
 
-class JAImsMessage:
+class Message:
     """
     Represents a message to be sent to or received from an LLM.
 
@@ -104,21 +125,21 @@ class JAImsMessage:
     Raw contains, depending on the adapter used, the raw response from the LLM used.
 
     Attributes:
-        role (JAImsMessageRole): The role of the message (USER, ASSISTANT, SYSTEM, TOOL).
-        contents (Optional[List[JAImsContentType]]): The contents of the message.
+        role (MessageRole): The role of the message (USER, ASSISTANT, SYSTEM, TOOL).
+        contents (Optional[List[ContentType]]): The contents of the message.
         name (Optional[str]): The name associated with the message.
-        tool_calls (Optional[List[JAImsToolCall]]): The tool calls associated with the message.
-        tool_responses (Optional[List[JAImsToolResponse]]): The tool responses associated with a message.
+        tool_calls (Optional[List[ToolCall]]): The tool calls associated with the message.
+        tool_responses (Optional[List[ToolResponse]]): The tool responses associated with a message.
         raw (Optional[Any]): The raw data associated with the message.
     """
 
     def __init__(
         self,
-        role: JAImsMessageRole,
-        contents: Optional[List[JAImsContentType]] = None,
+        role: MessageRole,
+        contents: Optional[List[ContentType]] = None,
         name: Optional[str] = None,
-        tool_calls: Optional[List[JAImsToolCall]] = None,
-        tool_responses: Optional[List[JAImsToolResponse]] = None,
+        tool_calls: Optional[List[ToolCall]] = None,
+        tool_responses: Optional[List[ToolResponse]] = None,
         raw: Optional[Any] = None,
     ):
         self.role = role
@@ -158,7 +179,7 @@ class JAImsMessage:
     def user_message(
         text: str,
         raw: Optional[Any] = None,
-    ) -> JAImsMessage:
+    ) -> Message:
         """
         Create a user message.
 
@@ -167,16 +188,16 @@ class JAImsMessage:
             raw (Optional[Any]): The raw data associated with the message.
 
         Returns:
-            JAImsMessage: The created user message.
+            Message: The created user message.
         """
-        return JAImsMessage(
-            role=JAImsMessageRole.USER,
+        return Message(
+            role=MessageRole.USER,
             contents=[text],
             raw=raw,
         )
 
     @staticmethod
-    def assistant_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
+    def assistant_message(text: str, raw: Optional[Any] = None) -> Message:
         """
         Create an assistant message.
 
@@ -185,16 +206,16 @@ class JAImsMessage:
             raw (Optional[Any]): The raw data associated with the message.
 
         Returns:
-            JAImsMessage: The created assistant message.
+            Message: The created assistant message.
         """
-        return JAImsMessage(
-            role=JAImsMessageRole.ASSISTANT,
+        return Message(
+            role=MessageRole.ASSISTANT,
             contents=[text],
             raw=raw,
         )
 
     @staticmethod
-    def system_message(text: str, raw: Optional[Any] = None) -> JAImsMessage:
+    def system_message(text: str, raw: Optional[Any] = None) -> Message:
         """
         Create a system message.
 
@@ -203,56 +224,61 @@ class JAImsMessage:
             raw (Optional[Any]): The raw data associated with the message.
 
         Returns:
-            JAImsMessage: The created system message.
+            Message: The created system message.
         """
-        return JAImsMessage(
-            role=JAImsMessageRole.SYSTEM,
+        return Message(
+            role=MessageRole.SYSTEM,
             contents=[text],
             raw=raw,
         )
 
     @staticmethod
     def tool_response_message(
-        responses: List[JAImsToolResponse], raw: Optional[Any] = None
-    ) -> JAImsMessage:
+        responses: List[ToolResponse], raw: Optional[Any] = None
+    ) -> Message:
         """
         Create a tool response message.
 
         Args:
-            responses (List[JAImsToolResponse]): The tool responses associated with the message.
+            responses (List[ToolResponse]): The tool responses associated with the message.
             raw (Optional[Any]): The raw data associated with the message.
 
         Returns:
-            JAImsMessage: The created tool response message.
+            Message: The created tool response message.
         """
-        return JAImsMessage(
-            role=JAImsMessageRole.TOOL,
+        return Message(
+            role=MessageRole.TOOL,
             tool_responses=responses,
             raw=raw,
         )
 
     @staticmethod
     def tool_call_message(
-        tool_calls: List[JAImsToolCall], raw: Optional[Any] = None
-    ) -> JAImsMessage:
+        tool_calls: List[ToolCall], raw: Optional[Any] = None
+    ) -> Message:
         """
         Create a tool call message.
 
         Args:
-            tool_calls (List[JAImsToolCall]): The tool calls associated with the message.
+            tool_calls (List[ToolCall]): The tool calls associated with the message.
             raw (Optional[Any]): The raw data associated with the message.
 
         Returns:
-            JAImsMessage: The created tool call message.
+            Message: The created tool call message.
         """
-        return JAImsMessage(
-            role=JAImsMessageRole.ASSISTANT,
+        return Message(
+            role=MessageRole.ASSISTANT,
             tool_calls=tool_calls,
             raw=raw,
         )
 
 
-class JAImsStreamingMessage:
+@deprecated("use Message instead.")
+class JAImsMessage(Message):
+    pass
+
+
+class StreamingMessage:
     """
     Represents the streaming message being received by an LLM.
 
@@ -260,11 +286,11 @@ class JAImsStreamingMessage:
     When reading the stream, you're usually interested in printing the textDelta, and once the stream is complete, you can use the message attribute to get the full message object.
 
     Attributes:
-        message (JAImsMessage): The main message object.
+        message (Message): The main message object.
         textDelta (Optional[str]): A delta fragment of the message being streamed.
     """
 
-    def __init__(self, message: JAImsMessage, textDelta: Optional[str] = None):
+    def __init__(self, message: Message, textDelta: Optional[str] = None):
         self.message = message
         self.textDelta = textDelta
 
@@ -276,7 +302,7 @@ class JAImsStreamingMessage:
 ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
-class JAImsFunctionToolDescriptor(Generic[ModelT]):
+class FunctionToolDescriptor(Generic[ModelT]):
     """
     Models a function tool that an LLM interacts with.
 
@@ -312,6 +338,12 @@ class JAImsFunctionToolDescriptor(Generic[ModelT]):
         Returns the JSON schema for the entity.
 
         If there are no parameters, an empty dictionary is returned.
+
+        Args:
+            remove_titles (bool): Whether to remove the title key from the schema. Defaults to True.
+            remove_any_of (bool): Whether to remove the anyOf key from the schema when multiple types are present. Defaults to False.
+            remove_all_of (bool): Whether to remove the allOf key from the schema when multiple types are present. Defaults to False.
+            dereference (bool): Whether to dereference the schema. Defaults to False.
 
         Returns:
             A dictionary representing the JSON schema for the entity.
@@ -427,9 +459,14 @@ class JAImsFunctionToolDescriptor(Generic[ModelT]):
         }
 
 
-class JAImsFunctionTool:
+@deprecated("use FunctionToolDescriptor instead.")
+class JAImsFunctionToolDescriptor(FunctionToolDescriptor):
+    pass
+
+
+class FunctionTool:
     """
-    Wrapper class that binds a python function to a JAImsFunctionToolDescriptor
+    Wrapper class that binds a python function to a FunctionToolDescriptor
 
     This class supports both simple function and class methods, and implements the __call__ method to seamlessly call the wrapped function.
 
@@ -440,14 +477,14 @@ class JAImsFunctionTool:
     Also take a look at the jaimsfunctiontool decorator that lets you easily decorate a function to be used seamlessly as a function tool (supporting basic python types and pydantic models as parameters).
 
     Args:
-        descriptor (JAImsFunctionToolDescriptor): The descriptor for the function tool.
+        descriptor (FunctionToolDescriptor): The descriptor for the function tool.
         function (Optional[Callable]): The function to be wrapped by the tool. Defaults to None.
         formatter (Optional[Callable[[Dict], Tuple[tuple, dict]]]): The formatter function to parse the data. Defaults to None (uses the default formatter).
     """
 
     def __init__(
         self,
-        descriptor: JAImsFunctionToolDescriptor[ModelT],
+        descriptor: FunctionToolDescriptor[ModelT],
         function: Optional[Callable] = None,
         formatter: Optional[Callable[[Dict], Tuple[tuple, dict]]] = None,
     ):
@@ -531,19 +568,21 @@ class JAImsFunctionTool:
         return self(*args, **kwargs)
 
 
+@deprecated("use FunctionTool instead.")
+class JAImsFunctionTool(FunctionTool):
+    pass
+
+
 # -----------------------------------
 # LLM Model Configuration and Options
 # -----------------------------------
 
 
-class JAImsLLMConfig:
+class LLMParams:
     """
-    Configuration class for JAIms Language Model.
+    Models common configuration parameters sent to the LLM.
 
     This class represents an abstraction over the most common configuration parameters for an LLM.
-    It can be used when adopting the platform-agnostic constructor for the JAImsAgent.
-    Use dedicated factories to pass specific configuration parameters to the LLM.
-
     Some LLMs support response formatting specifications, use the appropriate dictionary to specify the format depending on the LLM implementation being used.
 
     Args:
@@ -563,9 +602,14 @@ class JAImsLLMConfig:
         self.response_format = response_format
 
 
-class JAImsOptions:
+@deprecated("use LLMParams instead.")
+class JAImsLLMConfig(LLMParams):
+    pass
+
+
+class Config:
     """
-    Config options for the JAImsAgent when calling the remote LLM.
+    Config options for the Agent class when calling the remote LLM.
 
     These are mainly client options that control the behavior of the client when calling the LLM API and in case of errors or timeouts.
     JAIms natively supports exponential backoff for retries, and the options here allow to configure the behavior of the backoff.
@@ -608,11 +652,11 @@ class JAImsOptions:
         exponential_cap: Optional[int] = None,
         jitter: Optional[bool] = None,
         platform_specific_options: Optional[Dict[str, Any]] = None,
-    ) -> JAImsOptions:
+    ) -> Config:
         """
-        Returns a new JAImsOptions instance with the passed parameters overridden.
+        Returns a new Config instance with the passed parameters overridden.
         """
-        return JAImsOptions(
+        return Config(
             max_retries=max_retries if max_retries else self.max_retries,
             retry_delay=retry_delay if retry_delay else self.retry_delay,
             exponential_base=(
@@ -633,12 +677,17 @@ class JAImsOptions:
         )
 
 
+@deprecated("use Config instead.")
+class JAImsOptions(Config):
+    pass
+
+
 # ----------
 # exceptions
 # ----------
 
 
-class JAImsMaxConsecutiveFunctionCallsExceeded(Exception):
+class MaxConsecutiveFunctionCallsExceeded(Exception):
     """
     Exception raised when the maximum number of consecutive function calls is exceeded.
 
@@ -651,7 +700,7 @@ class JAImsMaxConsecutiveFunctionCallsExceeded(Exception):
         super().__init__(message)
 
 
-class JAImsUnexpectedFunctionCall(Exception):
+class UnexpectedFunctionCall(Exception):
     """
     Exception raised when an unexpected function call occurs.
 
@@ -664,7 +713,7 @@ class JAImsUnexpectedFunctionCall(Exception):
         super().__init__(message)
 
 
-class JAImsMaxRetriesExceeded(Exception):
+class MaxRetriesExceeded(Exception):
     """
     Exception raised when the maximum number of retries is performed by an adapter client.
 

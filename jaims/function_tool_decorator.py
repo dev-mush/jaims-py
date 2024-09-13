@@ -1,6 +1,6 @@
 from jaims.entities import (
-    JAImsFunctionTool,
-    JAImsFunctionToolDescriptor,
+    FunctionTool,
+    FunctionToolDescriptor,
 )
 from typing import Any, Optional, Dict
 import inspect
@@ -30,7 +30,7 @@ def jaimsfunctiontool(
         return_value_object_name (str): The name of the return value object. Defaults to "ToolResponse". Used only when the function expects multiple parameters.
 
     Returns:
-        The decorated function as a JAImsFunctionTool.
+        The decorated function as a FunctionTool.
 
     Raises:
         ValueError: If a parameter has no type annotation.
@@ -88,7 +88,7 @@ def jaimsfunctiontool(
         else:
             output_model = create_model(return_value_object_name, **params_models)
 
-        descriptor = JAImsFunctionToolDescriptor(
+        descriptor = FunctionToolDescriptor(
             name=tool_name, description=tool_description, params=output_model
         )
 
@@ -100,7 +100,7 @@ def jaimsfunctiontool(
 
             return (), kwargs
 
-        return JAImsFunctionTool(
+        return FunctionTool(
             function=func,
             formatter=formatter,
             descriptor=descriptor,

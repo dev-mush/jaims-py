@@ -1,13 +1,13 @@
 from typing import List
 from jaims import (
-    JAImsAgent,
-    JAImsFunctionTool,
-    JAImsToolCall,
-    JAImsMessage,
-    JAImsFunctionToolDescriptor,
-    JAImsToolManager,
-    JAImsDefaultHistoryManager,
-    JAImsToolResponse,
+    Agent,
+    FunctionTool,
+    ToolCall,
+    Message,
+    FunctionToolDescriptor,
+    ToolManagerITF,
+    DefaultHistoryManager,
+    ToolResponse,
     create_model,
     Field,
 )
@@ -18,19 +18,19 @@ from jaims.adapters.openai_adapter import (
 )
 
 
-class MyCustomToolManager(JAImsToolManager):
+class MyCustomToolManager(ToolManagerITF):
 
     def __init__(self) -> None:
         self.agent = None
 
-    def bind_agent(self, agent: JAImsAgent) -> None:
+    def bind_agent(self, agent: Agent) -> None:
         self.agent = agent
 
     def handle_tool_calls(
         self,
-        tool_calls: List[JAImsToolCall],
-        tools: List[JAImsFunctionTool],
-    ) -> List[JAImsToolResponse]:
+        tool_calls: List[ToolCall],
+        tools: List[FunctionTool],
+    ) -> List[ToolResponse]:
         tool_responses = []
         for tool_call in tool_calls:
             if tool_call.tool_name == "echo":
@@ -43,7 +43,7 @@ class MyCustomToolManager(JAImsToolManager):
                     is_error = True
 
                 tool_responses.append(
-                    JAImsToolResponse(
+                    ToolResponse(
                         tool_call_id=tool_call.id,
                         tool_name=tool_call.tool_name,
                         response=response_str,
@@ -61,7 +61,7 @@ class MyCustomToolManager(JAImsToolManager):
                     is_error = True
 
                 tool_responses.append(
-                    JAImsToolResponse(
+                    ToolResponse(
                         tool_call_id=tool_call.id,
                         tool_name=tool_call.tool_name,
                         response=response_str,
@@ -87,7 +87,7 @@ class MyCustomToolManager(JAImsToolManager):
                 )
                 self.agent.llm_interface = openai_adapter
                 tool_responses.append(
-                    JAImsToolResponse(
+                    ToolResponse(
                         tool_call_id=tool_call.id,
                         tool_name=tool_call.tool_name,
                         response=f"Model changed to {new_model}",
@@ -101,8 +101,8 @@ class MyCustomToolManager(JAImsToolManager):
 
 def main():
 
-    echo_wrapper = JAImsFunctionTool(
-        descriptor=JAImsFunctionToolDescriptor(
+    echo_wrapper = FunctionTool(
+        descriptor=FunctionToolDescriptor(
             name="echo",
             description="use this function when the user asks you to echo some string",
             params=create_model(
@@ -111,8 +111,8 @@ def main():
         ),
     )
 
-    reverse_wrapper = JAImsFunctionTool(
-        JAImsFunctionToolDescriptor(
+    reverse_wrapper = FunctionTool(
+        FunctionToolDescriptor(
             name="reverse",
             description="use this function when the user asks you to reverse some string",
             params=create_model(
@@ -122,8 +122,8 @@ def main():
         ),
     )
 
-    change_model_wrapper = JAImsFunctionTool(
-        JAImsFunctionToolDescriptor(
+    change_model_wrapper = FunctionTool(
+        FunctionToolDescriptor(
             name="change_model",
             description="use this function when the user asks you to change the current model",
             params=None,
@@ -132,13 +132,13 @@ def main():
 
     tool_manager = MyCustomToolManager()
 
-    agent = JAImsAgent.build(
+    agent = Agent.build(
         model="gpt-4-turbo",
         provider="openai",
         tool_manager=tool_manager,
-        history_manager=JAImsDefaultHistoryManager(
+        history_manager=DefaultHistoryManager(
             leading_prompts=[
-                JAImsMessage.system_message(
+                Message.system_message(
                     "You are JAIms, a helpful assistant that calls the tools that the user asks to call."
                 )
             ]
@@ -159,7 +159,7 @@ def main():
         if user_input == "exit":
             break
         response = agent.message_stream(
-            [JAImsMessage.user_message(user_input)],
+            [Message.user_message(user_input)],
         )
 
         for chunk in response:

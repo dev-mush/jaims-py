@@ -13,18 +13,18 @@ from typing import List, Optional, Dict, Literal
 from PIL import Image
 
 from ...interfaces import (
-    JAImsLLMInterface,
-    JAImsHistoryOptimizer,
+    LLMAdapterITF,
+    HistoryOptimizerITF,
 )
 from ...entities import (
-    JAImsImageContent,
-    JAImsContentType,
-    JAImsMessage,
-    JAImsStreamingMessage,
-    JAImsToolCall,
-    JAImsFunctionTool,
-    JAImsMessageRole,
-    JAImsOptions,
+    ImageContent,
+    ContentType,
+    Message,
+    StreamingMessage,
+    ToolCall,
+    FunctionTool,
+    MessageRole,
+    Config,
 )
 from ..shared.image_utilities import image_to_b64
 from ..shared.exponential_backoff_operation import (
@@ -187,10 +187,10 @@ class JAImsOpenaiKWArgs:
         )
 
 
-class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
+class JAImsTokenHistoryOptimizer(HistoryOptimizerITF):
     def __init__(
         self,
-        options: JAImsOptions,
+        options: Config,
         history_max_tokens: int,
         model: str,
     ):
@@ -198,7 +198,7 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
         self.history_max_tokens = history_max_tokens
         self.model = model
 
-    def optimize_history(self, messages: List[JAImsMessage]) -> List:
+    def optimize_history(self, messages: List[Message]) -> List:
 
         # Copying the whole history to avoid altering the original one
         buffer = messages.copy()
@@ -232,7 +232,7 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
         total = 85 + 170 * n
         return total
 
-    def __tokens_from_messages(self, messages: List[JAImsMessage], model):
+    def __tokens_from_messages(self, messages: List[Message], model):
         """Returns the number of tokens used by a list of messages."""
 
         images = []
@@ -278,7 +278,7 @@ class OpenAITransactionStorageInterface(ABC):
         pass
 
 
-class JAImsOpenaiAdapter(JAImsLLMInterface):
+class JAImsOpenaiAdapter(LLMAdapterITF):
     """
     The JAIms OpenAI adapter.
     """
@@ -286,7 +286,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        options: Optional[JAImsOptions] = None,
+        options: Optional[Config] = None,
         kwargs: Optional[Union[JAImsOpenaiKWArgs, Dict]] = None,
         kwargs_messages_behavior: Literal["append", "replace"] = "append",
         kwargs_tools_behavior: Literal["append", "replace"] = "append",
@@ -296,7 +296,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         if not self.api_key:
             raise Exception("OpenAI API key not provided.")
 
-        self.options = options or JAImsOptions()
+        self.options = options or Config()
         self.kwargs = kwargs or JAImsOpenaiKWArgs()
         self.kwargs_messages_behavior = kwargs_messages_behavior
         self.kwargs_tools_behavior = kwargs_tools_behavior
@@ -304,8 +304,8 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def __get_args(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
@@ -355,10 +355,10 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def call(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> JAImsMessage:
+    ) -> Message:
         args = self.__get_args(messages, tools, tool_constraints)
         response = self.___get_openai_response(args, self.options)
         assert isinstance(response, ChatCompletion)
@@ -372,10 +372,10 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def call_streaming(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[JAImsStreamingMessage, None, None]:
+    ) -> Generator[StreamingMessage, None, None]:
         args = self.__get_args(
             messages, tools, stream=True, tool_constraints=tool_constraints
         )
@@ -397,9 +397,9 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 response=accumulated_delta.model_dump(exclude_none=True),
             )
 
-    def __jaims_messages_to_openai(self, messages: List[JAImsMessage]) -> List[dict]:
+    def __jaims_messages_to_openai(self, messages: List[Message]) -> List[dict]:
 
-        def format_contents(contents: List[JAImsContentType]):
+        def format_contents(contents: List[ContentType]):
             if len(contents) == 1 and isinstance(contents[0], str):
                 return contents[0]
             else:
@@ -407,7 +407,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 for c in contents:
                     if isinstance(c, str):
                         raw_contents.append({"type": "text", "text": c})
-                    elif isinstance(c, JAImsImageContent):
+                    elif isinstance(c, ImageContent):
                         url = c.image
                         if isinstance(c.image, Image.Image):
                             mime, b64 = image_to_b64(c.image)
@@ -425,7 +425,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
                 return raw_contents
 
-        def format_tool_calls(tool_calls: List[JAImsToolCall]):
+        def format_tool_calls(tool_calls: List[ToolCall]):
             raw_tool_calls = []
             for tc in tool_calls:
                 raw_tool_call = {
@@ -472,7 +472,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         return raw_messages
 
-    def __jaims_tools_to_openai(self, tools: List[JAImsFunctionTool]) -> List[dict]:
+    def __jaims_tools_to_openai(self, tools: List[FunctionTool]) -> List[dict]:
         raw_tools = []
         for t in tools:
             tool_raw_dict = {
@@ -489,16 +489,16 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def __openai_chat_completion_to_jaims_message(
         self, completion: ChatCompletion
-    ) -> JAImsMessage:
+    ) -> Message:
         if len(completion.choices) == 0:
             raise Exception("OpenAI returned an empty response.")
 
         message = completion.choices[0].message
-        role = JAImsMessageRole(message.role)
+        role = MessageRole(message.role)
         tool_calls = None
         if message.tool_calls:
             tool_calls = [
-                JAImsToolCall(
+                ToolCall(
                     id=tc.id,
                     tool_name=tc.function.name,
                     tool_args=json.loads(tc.function.arguments),
@@ -506,7 +506,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 for tc in message.tool_calls
             ]
 
-        return JAImsMessage(
+        return Message(
             role=role,
             contents=[message.content] if message.content else None,
             tool_calls=tool_calls,
@@ -515,19 +515,19 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def __openai_chat_completion_choice_delta_to_jaims_message(
         self, accumulated_choice_delta: ChoiceDelta, current_chunk: ChatCompletionChunk
-    ) -> JAImsStreamingMessage:
+    ) -> StreamingMessage:
 
         current_choice = current_chunk.choices[0]
         role = (
-            JAImsMessageRole(current_choice.delta.role)
+            MessageRole(current_choice.delta.role)
             if current_choice.delta.role
             else accumulated_choice_delta.role
         )
         textDelta = current_choice.delta.content
-        contents: Optional[List[JAImsContentType]] = None
+        contents: Optional[List[ContentType]] = None
         function_tool_calls = None
 
-        role = JAImsMessageRole(accumulated_choice_delta.role)
+        role = MessageRole(accumulated_choice_delta.role)
         if accumulated_choice_delta.content:
             contents = [
                 accumulated_choice_delta.content,
@@ -538,7 +538,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             for tc in accumulated_choice_delta.tool_calls:
                 if tc.function:
                     function_tool_calls.append(
-                        JAImsToolCall(
+                        ToolCall(
                             id=tc.id or "",
                             tool_name=tc.function.name or "",
                             tool_args=(
@@ -549,8 +549,8 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                         )
                     )
 
-        return JAImsStreamingMessage(
-            message=JAImsMessage(
+        return StreamingMessage(
+            message=Message(
                 role=role,
                 contents=contents,
                 tool_calls=function_tool_calls,
@@ -562,7 +562,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
     def ___get_openai_response(
         self,
         openai_kw_args: dict,
-        call_options: JAImsOptions,
+        call_options: Config,
     ) -> Union[ChatCompletion, Stream[ChatCompletionChunk]]:
 
         def handle_openai_error(error) -> ErrorHandlingMethod:

@@ -1,5 +1,5 @@
 import unittest
-from jaims import JAImsFunctionTool, JAImsFunctionToolDescriptor
+from jaims import FunctionTool, FunctionToolDescriptor
 from pydantic import BaseModel, Field
 
 
@@ -11,7 +11,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
             mock_str: str = Field(description="Mock string")
             mock_num: int = Field(description="Mock number")
 
-        tool_descriptor = JAImsFunctionToolDescriptor(
+        tool_descriptor = FunctionToolDescriptor(
             name="mock_tool", description="Mock tool", params=MockClass
         )
 
@@ -22,7 +22,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
                 nonlocal result
                 result = True
 
-        tool = JAImsFunctionTool(descriptor=tool_descriptor, function=mock_function)
+        tool = FunctionTool(descriptor=tool_descriptor, function=mock_function)
 
         tool.call_raw(**{"mock_str": "mock", "mock_num": 1})
 
@@ -34,7 +34,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
             mock_str: str = Field(description="Mock string")
             mock_num: int = Field(description="Mock number")
 
-        tool_descriptor = JAImsFunctionToolDescriptor(
+        tool_descriptor = FunctionToolDescriptor(
             name="mock_tool", description="Mock tool", params=MockClass
         )
 
@@ -45,7 +45,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
                 nonlocal result
                 result = True
 
-        tool = JAImsFunctionTool(descriptor=tool_descriptor, function=mock_function)
+        tool = FunctionTool(descriptor=tool_descriptor, function=mock_function)
 
         tool.call_raw(**{"mock_str": "mock", "mock_num": 1})
 
@@ -57,7 +57,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
             mock_str: str = Field(description="Mock string")
             mock_num: int = Field(description="Mock number")
 
-        tool_descriptor = JAImsFunctionToolDescriptor(
+        tool_descriptor = FunctionToolDescriptor(
             name="mock_tool", description="Mock tool", params=MockClass
         )
 
@@ -72,9 +72,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
 
         instance = MockClassInstance()
 
-        tool = JAImsFunctionTool(
-            descriptor=tool_descriptor, function=instance.mock_method
-        )
+        tool = FunctionTool(descriptor=tool_descriptor, function=instance.mock_method)
 
         tool.call_raw(**{"mock_str": "mock", "mock_num": 1})
 
@@ -86,7 +84,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
             mock_str: str = Field(description="Mock string")
             mock_num: int = Field(description="Mock number")
 
-        tool_descriptor = JAImsFunctionToolDescriptor(
+        tool_descriptor = FunctionToolDescriptor(
             name="mock_tool", description="Mock tool", params=MockClass
         )
 
@@ -103,7 +101,7 @@ class TestJAImsFunctionTool(unittest.TestCase):
                 "second_param": data["mock_num"],
             }
 
-        tool = JAImsFunctionTool(
+        tool = FunctionTool(
             descriptor=tool_descriptor,
             function=mock_function,
             formatter=custom_formatter,

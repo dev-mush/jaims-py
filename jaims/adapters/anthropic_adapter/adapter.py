@@ -7,7 +7,6 @@ from PIL import Image
 from anthropic import AsyncAnthropic, Anthropic
 from anthropic.types import (
     ToolParam,
-    Message,
     ToolUseBlock,
     TextBlock,
     MessageParam,
@@ -17,6 +16,8 @@ from anthropic.types import (
     ToolResultBlockParam,
 )
 
+from anthropic.types import Message as ClaudeMessage
+
 from anthropic.types.message_create_params import (
     ToolChoiceToolChoiceAny,
     ToolChoiceToolChoiceAuto,
@@ -24,15 +25,15 @@ from anthropic.types.message_create_params import (
     ToolChoice,
 )
 
-from ...interfaces import JAImsLLMInterface
+from ...interfaces import LLMAdapterITF
 from ...entities import (
-    JAImsImageContent,
-    JAImsMessage,
-    JAImsStreamingMessage,
-    JAImsToolCall,
-    JAImsFunctionTool,
-    JAImsMessageRole,
-    JAImsOptions,
+    ImageContent,
+    Message,
+    StreamingMessage,
+    ToolCall,
+    FunctionTool,
+    MessageRole,
+    Config,
 )
 from ..shared.image_utilities import image_to_b64
 
@@ -81,11 +82,11 @@ class JAImsAnthropicKWArgs:
         return JAImsAnthropicKWArgs.from_dict(new_kwargs)
 
 
-class JAImsAnthropicAdapter(JAImsLLMInterface):
+class JAImsAnthropicAdapter(LLMAdapterITF):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        options: Optional[JAImsOptions] = None,
+        options: Optional[Config] = None,
         kwargs: Optional[Union[JAImsAnthropicKWArgs, Dict]] = None,
         provider: Literal["anthropic", "vertex"] = "anthropic",
         kwargs_messages_behavior: Literal["append", "replace"] = "append",
@@ -95,7 +96,7 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
         if not self.api_key:
             raise Exception("Anthropic API key not provided.")
 
-        self.options = options or JAImsOptions()
+        self.options = options or Config()
         self.kwargs = kwargs or JAImsAnthropicKWArgs()
         self.kwargs_messages_behavior = kwargs_messages_behavior
         self.kwargs_tools_behavior = kwargs_tools_behavior
@@ -103,8 +104,8 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
 
     def __get_args(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ):
 
@@ -151,10 +152,10 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
 
     def call(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> JAImsMessage:
+    ) -> Message:
         args = self.__get_args(messages, tools, tool_constraints)
 
         if self.provider == "anthropic":
@@ -178,10 +179,10 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
 
     def call_streaming(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[JAImsStreamingMessage, None, None]:
+    ) -> Generator[StreamingMessage, None, None]:
         args = self.__get_args(messages, tools, tool_constraints)
 
         async def stream_generator():
@@ -206,14 +207,14 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
                     snapshot = self.__claude_message_to_jaims_message(
                         stream.current_message_snapshot
                     )
-                    yield JAImsStreamingMessage(
+                    yield StreamingMessage(
                         message=snapshot,
                         textDelta=text,
                     )
 
                 message = await stream.get_final_message()
                 final_message = self.__claude_message_to_jaims_message(message)
-                yield JAImsStreamingMessage(message=final_message, textDelta=None)
+                yield StreamingMessage(message=final_message, textDelta=None)
 
         def sync_generator():
             loop = asyncio.get_event_loop()
@@ -227,13 +228,13 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
         return sync_generator()
 
     def __jaims_messages_to_claude(
-        self, messages: List[JAImsMessage]
+        self, messages: List[Message]
     ) -> Tuple[Optional[str], List[MessageParam]]:
 
         def jaims_role_to_claude_role(
-            role: JAImsMessageRole,
+            role: MessageRole,
         ) -> Literal["user", "assistant"]:
-            if role in [JAImsMessageRole.USER, JAImsMessageRole.TOOL]:
+            if role in [MessageRole.USER, MessageRole.TOOL]:
                 return "user"
             return "assistant"
 
@@ -246,7 +247,7 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
                 for c in m.contents:
                     if isinstance(c, str):
                         content.append(TextBlockParam(type="text", text=c))
-                    elif isinstance(c, JAImsImageContent):
+                    elif isinstance(c, ImageContent):
                         if isinstance(c.image, str):
                             content.append(
                                 image_content=ImageBlockParam(
@@ -293,7 +294,7 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
                         )
                     )
 
-            if m.role == JAImsMessageRole.SYSTEM:
+            if m.role == MessageRole.SYSTEM:
                 system_message = (
                     "\n".join(c["text"] for c in content)
                     if system_message is None
@@ -310,9 +311,7 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
 
         return system_message, claude_messages
 
-    def __jaims_tools_to_claude(
-        self, tools: List[JAImsFunctionTool]
-    ) -> List[ToolParam]:
+    def __jaims_tools_to_claude(self, tools: List[FunctionTool]) -> List[ToolParam]:
         claude_tools = []
         for t in tools:
             claude_tool = {
@@ -324,8 +323,8 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
         return claude_tools
 
     def __claude_message_to_jaims_message(
-        self, claude_message: Message
-    ) -> JAImsMessage:
+        self, claude_message: ClaudeMessage
+    ) -> Message:
 
         contents = []
         tool_calls = []
@@ -335,15 +334,15 @@ class JAImsAnthropicAdapter(JAImsLLMInterface):
                 contents.append(content.text)
             elif isinstance(content, ToolUseBlock):
                 tool_calls.append(
-                    JAImsToolCall(
+                    ToolCall(
                         id=content.id,
                         tool_name=content.name,
                         tool_args=content.input,  # type: ignore
                     )
                 )
 
-        return JAImsMessage(
-            role=JAImsMessageRole.ASSISTANT,
+        return Message(
+            role=MessageRole.ASSISTANT,
             contents=contents,
             tool_calls=tool_calls,
             raw=claude_message,

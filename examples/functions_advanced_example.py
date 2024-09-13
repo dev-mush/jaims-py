@@ -1,8 +1,8 @@
 from typing import List, Optional
 from jaims import (
-    JAImsAgent,
-    JAImsDefaultHistoryManager,
-    JAImsMessage,
+    Agent,
+    DefaultHistoryManager,
+    Message,
     BaseModel,
     Field,
     jaimsfunctiontool,
@@ -40,11 +40,11 @@ system_prompt = """
 
 def main():
 
-    agent = JAImsAgent.build(
+    agent = Agent.build(
         model="gpt-4o",
         provider="openai",
-        history_manager=JAImsDefaultHistoryManager(
-            leading_prompts=[JAImsMessage.system_message(system_prompt)]
+        history_manager=DefaultHistoryManager(
+            leading_prompts=[Message.system_message(system_prompt)]
         ),
         tools=[store_person_records],
     )
@@ -56,7 +56,7 @@ def main():
         if user_input == "exit":
             break
         response = agent.message_stream(
-            [JAImsMessage.user_message(user_input)],
+            [Message.user_message(user_input)],
         )
 
         if response:

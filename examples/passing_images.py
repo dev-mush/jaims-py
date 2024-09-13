@@ -1,5 +1,5 @@
 import os
-from jaims import JAImsImageContent, JAImsMessage
+from jaims import ImageContent, Message
 
 from jaims.adapters.openai_adapter import (
     JAImsOpenaiKWArgs,
@@ -12,7 +12,7 @@ from jaims.adapters.google_generative_ai_adapter import (
 
 from PIL import Image
 
-from jaims.entities import JAImsMessageRole
+from jaims.entities import MessageRole
 
 
 def main():
@@ -36,12 +36,12 @@ def main():
 
     openai_response = openai_agent.message(
         [
-            JAImsMessage(
-                role=JAImsMessageRole.USER,
+            Message(
+                role=MessageRole.USER,
                 contents=[
                     "Are these images the same? What do they contain?",
-                    JAImsImageContent(pil_image),
-                    JAImsImageContent(image_url),
+                    ImageContent(pil_image),
+                    ImageContent(image_url),
                 ],
             )
         ]
@@ -52,11 +52,11 @@ def main():
 
     gemini_response = gemini_agent.message(
         [
-            JAImsMessage(
-                role=JAImsMessageRole.USER,
+            Message(
+                role=MessageRole.USER,
                 contents=[
                     "What does this image contain?",
-                    JAImsImageContent(pil_image),
+                    ImageContent(pil_image),
                 ],
             )
         ]

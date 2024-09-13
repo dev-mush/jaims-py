@@ -1,9 +1,9 @@
 from jaims import (
-    JAImsAgent,
-    JAImsDefaultHistoryManager,
-    JAImsMessage,
-    JAImsLLMConfig,
-    JAImsOptions,
+    Agent,
+    DefaultHistoryManager,
+    Message,
+    LLMParams,
+    Config,
     jaimsfunctiontool,
 )
 
@@ -44,20 +44,20 @@ def main():
     model = "gemini-1.5-pro"
     provider = "vertex"
 
-    agent = JAImsAgent.build(
+    agent = Agent.build(
         model=model,
         provider=provider,
-        options=JAImsOptions(
+        options=Config(
             platform_specific_options={
                 "project_id": "your-project-id",
                 "location": "europe-west1",
             }
         ),
-        config=JAImsLLMConfig(
+        config=LLMParams(
             temperature=0.5,
             max_tokens=2000,
         ),
-        history_manager=JAImsDefaultHistoryManager(),
+        history_manager=DefaultHistoryManager(),
         tools=[
             sum,
             multiply,
@@ -74,14 +74,14 @@ def main():
 
         if stream:
             response = agent.message_stream(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
             response = agent.message(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             print(response)
 

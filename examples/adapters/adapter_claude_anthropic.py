@@ -1,6 +1,6 @@
 from jaims import (
-    JAImsDefaultHistoryManager,
-    JAImsMessage,
+    DefaultHistoryManager,
+    Message,
     jaimsfunctiontool,
 )
 
@@ -8,7 +8,7 @@ from jaims.adapters.anthropic_adapter import (
     JAImsAnthropicAdapter,
     JAImsAnthropicKWArgs,
 )
-from jaims.agent import JAImsAgent
+from jaims.agent import Agent
 
 
 @jaimsfunctiontool(
@@ -60,9 +60,9 @@ def main():
         kwargs=JAImsAnthropicKWArgs(model="claude-3-5-sonnet-20240620"),
     )
 
-    agent = JAImsAgent(
+    agent = Agent(
         llm_interface=adapter,
-        history_manager=JAImsDefaultHistoryManager(),
+        history_manager=DefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )
 
@@ -75,14 +75,14 @@ def main():
 
         if stream:
             response = agent.message_stream(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
             response = agent.message(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             print(response)
 

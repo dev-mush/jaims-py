@@ -1,21 +1,20 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
 
 
 from typing import List
 from jaims.entities import (
-    JAImsFunctionTool,
-    JAImsUnexpectedFunctionCall,
-    JAImsToolCall,
-    JAImsToolResponse,
+    FunctionTool,
+    UnexpectedFunctionCall,
+    ToolCall,
+    ToolResponse,
 )
 
-from jaims.interfaces import JAImsToolManager
+from jaims.interfaces import ToolManagerITF
 
 
-class JAImsDefaultToolManager(JAImsToolManager):
+class DefaultToolManager(ToolManagerITF):
     """
-    A class that manages tool calls in JAIms.
+    Manages tool calls in JAIms.
 
     This class handles tool calls by executing the corresponding wrapped functions and formatting the results as messages to be consumed by the LLM.
     Supports parallel execution of multiple tool calls.
@@ -30,23 +29,21 @@ class JAImsDefaultToolManager(JAImsToolManager):
 
     def handle_tool_calls(
         self,
-        tool_calls: List[JAImsToolCall],
-        tools: List[JAImsFunctionTool],
-    ) -> List[JAImsToolResponse]:
+        tool_calls: List[ToolCall],
+        tools: List[FunctionTool],
+    ) -> List[ToolResponse]:
         """
         Executes the tool calls and formats the results as messages to be consumed by the LLM.
 
-        The results of the tools have to be json-serializable in order to be sent as messages.
-
         Args:
-            tool_calls (List[JAImsToolCall]): The list of tool calls to be executed.
-            tools (List[JAImsFunctionTool]): The list of available tools.
+            tool_calls (List[ToolCall]): The list of tool calls to be executed.
+            tools (List[FunctionTool]): The function tool wrappers to be used to execute the tool calls.
 
         Returns:
-            List[JAImsToolResponse]: A list of JAImsToolResponse objects representing the results of the tool calls.
+            List[ToolResponse]: A list of ToolResponse objects representing the results of the tool calls.
 
         Raises:
-            JAImsUnexpectedFunctionCall: If a tool call does not match any available tool.
+            UnexpectedFunctionCall: If a tool call is not found in the list of function tools.
 
         """
         results = []
@@ -57,13 +54,13 @@ class JAImsDefaultToolManager(JAImsToolManager):
                 None,
             )
             if not tool_wrapper:
-                raise JAImsUnexpectedFunctionCall(function_name)
+                raise UnexpectedFunctionCall(function_name)
 
             args = fc.tool_args or {}
             try:
                 fc_result = tool_wrapper.call_raw(**args)
                 results.append(
-                    JAImsToolResponse(
+                    ToolResponse(
                         tool_call_id=fc.id,
                         tool_name=fc.tool_name,
                         response=fc_result,
@@ -71,7 +68,7 @@ class JAImsDefaultToolManager(JAImsToolManager):
                 )
             except Exception as e:
                 results.append(
-                    JAImsToolResponse(
+                    ToolResponse(
                         tool_call_id=fc.id,
                         tool_name=fc.tool_name,
                         response=str(e),

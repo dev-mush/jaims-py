@@ -1,26 +1,27 @@
 from __future__ import annotations
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Any, Literal
+from typing_extensions import deprecated
 
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from .interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
+    from .interfaces import LLMAdapterITF, HistoryManagerITF, ToolManagerITF
 
 from typing import Generator, List, Optional
 
 
-from jaims.default_tool_manager import JAImsDefaultToolManager
+from jaims.default_tool_manager import DefaultToolManager
 
 
 from jaims.entities import (
-    JAImsFunctionToolDescriptor,
-    JAImsMaxConsecutiveFunctionCallsExceeded,
-    JAImsMessage,
-    JAImsStreamingMessage,
-    JAImsFunctionTool,
-    JAImsLLMConfig,
-    JAImsOptions,
+    FunctionToolDescriptor,
+    MaxConsecutiveFunctionCallsExceeded,
+    Message,
+    StreamingMessage,
+    FunctionTool,
+    LLMParams,
+    Config,
     ModelT,
 )
 
@@ -50,14 +51,14 @@ class _SessionState(Enum):
 class _SessionStateController:
     def __init__(
         self,
-        initial_messages: List[JAImsMessage],
-        tools: List[JAImsFunctionTool],
+        initial_messages: List[Message],
+        tools: List[FunctionTool],
         max_consecutive_tool_call_retries: int,
         max_consecutive_iterations: int,
-        tool_manager: JAImsToolManager,
+        tool_manager: ToolManagerITF,
         tool_call_error_behavior: str,
         tool_constraints: Optional[List[str]] = None,
-        history_manager: Optional[JAImsHistoryManager] = None,
+        history_manager: Optional[HistoryManagerITF] = None,
     ):
         self.state = _SessionState.RUN
         self.__error = None
@@ -74,24 +75,24 @@ class _SessionStateController:
         self.__session_messages = []
         self.__update_messages(initial_messages)
 
-    def get_next_iteration_messages(self) -> List[JAImsMessage]:
+    def get_next_iteration_messages(self) -> List[Message]:
         if self.__history_manager:
             return self.__history_manager.get_messages()
 
         return self.__session_messages
 
-    def get_session_response_messages(self) -> List[JAImsMessage]:
+    def get_session_response_messages(self) -> List[Message]:
         return self.__session_messages[len(self.__initial_messages) :]
 
     def get_error(self) -> Any:
         return self.__error
 
-    def __update_messages(self, messages: List[JAImsMessage]):
+    def __update_messages(self, messages: List[Message]):
         self.__session_messages.extend(messages)
         if self.__history_manager:
             self.__history_manager.add_messages(messages)
 
-    def __should_forward_to_llm(self, messages: List[JAImsMessage]) -> bool:
+    def __should_forward_to_llm(self, messages: List[Message]) -> bool:
         """
         Evaluates if the messages contain any data that should be forwarded to the LLM
         depending on the current tool_constraints configuration.
@@ -107,7 +108,7 @@ class _SessionStateController:
 
     def update(
         self,
-        llm_response: JAImsMessage,
+        llm_response: Message,
     ):
         # check initial state and rule out illegal state transitions
         if self.state == _SessionState.ERROR:
@@ -124,7 +125,7 @@ class _SessionStateController:
         self._iterations += 1
         if self._iterations > self.__max_consecutive_iterations:
             self.state = _SessionState.ERROR
-            self.__error = JAImsMaxConsecutiveFunctionCallsExceeded(self._iterations)
+            self.__error = MaxConsecutiveFunctionCallsExceeded(self._iterations)
             return
 
         # evaluate tool calls request
@@ -132,7 +133,7 @@ class _SessionStateController:
             self.__tool_call_retries += 1
             if self.__tool_call_retries > self.__max_consecutive_tool_call_retries:
                 self.state = _SessionState.ERROR
-                self.__error = JAImsMaxConsecutiveFunctionCallsExceeded(
+                self.__error = MaxConsecutiveFunctionCallsExceeded(
                     self.__tool_call_retries
                 )
                 return
@@ -158,7 +159,7 @@ class _SessionStateController:
                     return
 
             next_iteration_messages.append(
-                JAImsMessage.tool_response_message(tool_responses)
+                Message.tool_response_message(tool_responses)
             )
 
         self.__update_messages(next_iteration_messages)
@@ -170,37 +171,38 @@ class _SessionStateController:
             self.state = _SessionState.COMPLETE
 
 
-class JAImsAgent:
+class Agent:
     """
-    Base  JAIms Agent class, interacts with the JAImsLLMInterface to run messages and tools.
+    Base  JAIms Agent class, interacts with the LLM Interface to run messages and tools.
 
     Tools can be injected in the constructor once, or passed when invoking (overriding the injected tools at every invocation).
     Provide an history_manager if you plan to use the agent as a chat agent and want to keep track of the conversation.
     Provide a tool_manager if you want to customize the tool handling.
 
     Args:
-        llm_interface (JAImsLLMInterface): The LLM interface to use.
-        tools (Optional[List[JAImsFunctionTool]]): The list of tools to use. Defaults to None.
-        history_manager (Optional[JAImsHistoryManager]): The history manager to use. Defaults to None.
-        tool_manager (Optional[JAImsToolManager]): The tool manager to use. Defaults to None.
-        tool_call_error_behavior (Literal["retry", "raise", "forward_to_llm"]): The behavior to adopt when a tool call fails. Defaults to "retry". retry will retry the tool call, raise will raise an exception, forward_to_llm will forward the error message to the LLM.
-        max_consecutive_tool_calls (int): The maximum number of consecutive tool calls allowed. Defaults to 10.
-        max_consecutive_tool_call_retries (int): The maximum number of consecutive retries allowed when a tool call fails and tool_call_error_behavir is "retry". Defaults to 3.
+        llm_interface (LLMIITF): The LLM interface to use.
+        tools (Optional[List[FunctionTool]]): The list of tools to use. Defaults to None.
+        history_manager (Optional[HistoryManager]): The history manager to use. Defaults to None.
+        tool_manager (Optional[ToolManager]): The tool manager to use. Defaults to None.
+        tools: Optional[List[FunctionTool]]): The list of tools to use. Defaults to None.
+        tool_call_error_behavior (Literal["retry", "raise", "forward_to_llm"]): The behavior to adopt when a tool call fails. Defaults to "retry".retry will retry the tool call, raise will raise an exception, forward_to_llm will forward the error message to the LLM.
+        max_consecutive_tool_calls (int): The maximum number of consecutive tool calls allowed. Defaults to 10, raise an exception if exceeded.
+        max_consecutive_tool_call_retries (int): The maximum number of consecutive retries allowed when a tool call fails (client side) and tool_call_error_behavir is "retry". Defaults to 3, raise an exception if exceeded.
     """
 
     def __init__(
         self,
-        llm_interface: JAImsLLMInterface,
-        history_manager: Optional[JAImsHistoryManager] = None,
-        tool_manager: Optional[JAImsToolManager] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        llm_interface: LLMAdapterITF,
+        history_manager: Optional[HistoryManagerITF] = None,
+        tool_manager: Optional[ToolManagerITF] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         max_consecutive_tool_calls: int = 10,
         max_consecutive_tool_call_retries: int = 3,
         tool_call_error_behavior: Literal["retry", "raise", "forward_to_llm"] = "retry",
     ):
         self.llm_interface = llm_interface
-        self.tool_manager = tool_manager or JAImsDefaultToolManager()
+        self.tool_manager = tool_manager or DefaultToolManager()
         self.tools = tools or []
         self.history_manager = history_manager
         self.max_consecutive_tool_calls = max_consecutive_tool_calls
@@ -213,17 +215,19 @@ class JAImsAgent:
         model: str,
         provider: SUPPORTED_PROVIDERS,
         api_key: Optional[str] = None,
-        options: Optional[JAImsOptions] = None,
-        config: Optional[JAImsLLMConfig] = None,
-        history_manager: Optional[JAImsHistoryManager] = None,
-        tool_manager: Optional[JAImsToolManager] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        options: Optional[Config] = None,
+        config: Optional[LLMParams] = None,
+        history_manager: Optional[HistoryManagerITF] = None,
+        tool_manager: Optional[ToolManagerITF] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> JAImsAgent:
+    ) -> Agent:
         """
         Factory method to build an agent with the specified parameters.
 
-        Currently available providers are: [openai, google, mistral]. Make sure to install the required dependencies using:
+        This method is the recommended way to create an agent instance, you can directly specify the model and provider to use, and pass the most common configuration here. If you need fine-grained control over the agent creation, you can create the agent instance manually by instantiating the wanted LLMAdapterITF (or implementing your own) and passing it to the Agent constructor.
+
+        Remember to install the required dependencies for the provider you want to use, e.g. for OpenAI, Google, and Mistral:
 
         ```bash
         pip install jaims-py[openai, google, mistral]
@@ -235,15 +239,15 @@ class JAImsAgent:
             model (str): The model to use.
             provider (SUPPORTED_PROVIDERS): The provider to use.
             api_key (Optional[str]): The API key. Defaults to None.
-            options (Optional[JAImsOptions]): The options. Defaults to None.
-            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
-            history_manager (Optional[JAImsHistoryManager]): The history manager. Defaults to None.
-            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
-            tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
-            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None.
+            options (Optional[Options]): The options. Defaults to None.
+            config (Optional[LLMParams]): The params to be sent to the LLM Interface at each call. Defaults to None.
+            history_manager (Optional[HistoryManager]): The history manager. Defaults to None. Use DefaultHistoryManager to implement chat-like behavior.
+            tool_manager (Optional[ToolManager]): The tool manager. Defaults to None. Usually you don't need to provide a custom tool manager.
+            tools (Optional[List[FunctionTool]]): The list of tools. Defaults to None. You can pass tools here so they are defined just once, or pass them when invoking the agent for each run.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None. When None, the LLM works in agent mode (if supported) and picks the tools to use, otherwise it will use the tools that match the constraints. (Depends on the implementation of the LLM Interface).
 
         Returns:
-            JAImsAgent: The agent instance.
+            Agent: The agent instance.
         """
 
         assert (
@@ -256,8 +260,8 @@ class JAImsAgent:
             return openai_factory(
                 model=model,
                 api_key=api_key,
-                options=options,
-                config=config,
+                config=options,
+                llm_params=config,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -269,8 +273,8 @@ class JAImsAgent:
             return google_factory(
                 model=model,
                 api_key=api_key,
-                options=options,
-                config=config,
+                config=options,
+                llm_params=config,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -282,8 +286,8 @@ class JAImsAgent:
             return mistral_factory(
                 model=model,
                 api_key=api_key,
-                options=options,
-                config=config,
+                config=options,
+                llm_params=config,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -295,8 +299,8 @@ class JAImsAgent:
             return anthropic_factory(
                 model=model,
                 api_key=api_key,
-                options=options,
-                config=config,
+                config=options,
+                llm_params=config,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -312,8 +316,8 @@ class JAImsAgent:
                     model=model,
                     api_key=api_key,
                     provider="vertex",
-                    options=options,
-                    config=config,
+                    config=options,
+                    llm_params=config,
                     history_manager=history_manager,
                     tool_manager=tool_manager,
                     tools=tools,
@@ -326,8 +330,8 @@ class JAImsAgent:
                 return vertex_ai_factory(
                     model=model,
                     api_key=api_key,
-                    options=options,
-                    config=config,
+                    config=options,
+                    llm_params=config,
                     history_manager=history_manager,
                     tool_manager=tool_manager,
                     tools=tools,
@@ -336,20 +340,22 @@ class JAImsAgent:
 
     def run(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> List[JAImsMessage]:
+    ) -> List[Message]:
         """
         Runs the agent with the given messages and tools and returns the response message.
 
+        When the agent has been instantiated with tools and tool_constraints and this method receives tools and tool_constraints, the tools and tool_constraints passed to this method will override the ones injected in the constructor, only for this run (they get discarded after the run and those injected in the constructor will be used again).
+
         Args:
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            messages (Optional[List[Message]]): The list of messages. Defaults to None.
+            tools (Optional[List[FunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
             tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Returns:
-            List[JAImsMessage]: The response messages.
+            List[Message]: The response messages.
         """
 
         messages = messages or []
@@ -384,45 +390,41 @@ class JAImsAgent:
     @staticmethod
     def run_model(
         model: str,
-        provider: Literal[
-            "openai",
-            "google",
-            "mistral",
-            "anthropic",
-            "vertex",
-        ],
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
-        tools_constraints: Optional[List[str]] = None,
+        provider: SUPPORTED_PROVIDERS,
         api_key: Optional[str] = None,
-        options: Optional[JAImsOptions] = None,
-        config: Optional[JAImsLLMConfig] = None,
-        tool_manager: Optional[JAImsToolManager] = None,
-    ) -> List[JAImsMessage]:
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
+        tools_constraints: Optional[List[str]] = None,
+        tool_manager: Optional[ToolManagerITF] = None,
+        config: Optional[Config] = None,
+        llm_params: Optional[LLMParams] = None,
+    ) -> List[Message]:
         """
-        Runs the specified model with the given parameters and returns the response message.
+        Runs the specified model with the given parameters and returns the response message. Doesn't require an Agent instance.
+
+        This method is useful for inline usage when you don't need to keep the agent instance around. Has the same effect of creating an agent instance and calling the run method.
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google", "mistral", "anthropic","vertex"]): The provider to use.
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            tools (Optional[List[JAImsFunctionTool]]): The list of tools. Defaults to None.
-            tools_constraints (Optional[List[str]]): The list of tool identifiers that should be used. Defaults to None.
+            provider (Literal): The provider to use (among the supported providers).
             api_key (Optional[str]): The API key. Defaults to None.
-            options (Optional[JAImsOptions]): The options. Defaults to None.
-            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
-            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+            messages (Optional[List[Message]]): The list of messages to be sent to the LLM. Defaults to None.
+            tools (Optional[List[FunctionTool]]): The list of tools that the LLM will use. Defaults to None.
+            tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
+            tool_manager (Optional[ToolManagerITF]): The tool manager. Defaults to None. Usually you don't need to provide a custom tool manager.
+            config (Optional[Config]): The config to use. Defaults to None. (When none, the default config will be used).
+            llm_params (Optional[LLMParams]): The llm_params to be used. Defaults to None. (When none, the default llm_params will be used).
 
         Returns:
-            JAImsMessage: The response message.
+            Message: The response message.
         """
 
-        agent = JAImsAgent.build(
+        agent = Agent.build(
             model=model,
             provider=provider,
             api_key=api_key,
-            options=options,
-            config=config,
+            options=config,
+            config=llm_params,
             tool_manager=tool_manager,
             tools=tools,
         )
@@ -431,18 +433,20 @@ class JAImsAgent:
 
     def run_tool(
         self,
-        descriptor: JAImsFunctionToolDescriptor[ModelT],
-        messages: Optional[List[JAImsMessage]] = None,
+        descriptor: FunctionToolDescriptor[ModelT],
+        messages: Optional[List[Message]] = None,
     ) -> ModelT:
         """
-        Runs a single tool with the given messages and returns the expected response data.
+        Runs a single tool with the given messages and returns the expected response data defined by the tool descriptor.
+
+        This method is useful when you want to execute a task with an LLM and want the result formatted into a pydantic model to be used in your application.
 
         Args:
-            tool (JAImsFunctionToolDescriptor): The tool to run.
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            descriptor (FunctionToolDescriptor): The tool descriptor to use.
+            messages (Optional[List[Message]]): The list of messages. Defaults to None.
 
         Returns:
-            BaseModel: The expected response data defined by the tool descriptor.
+            ModelT: The expected response data defined by the tool descriptor.
         """
 
         response_data = None
@@ -451,7 +455,7 @@ class JAImsAgent:
             nonlocal response_data
             response_data = response
 
-        tool = JAImsFunctionTool(
+        tool = FunctionTool(
             descriptor=descriptor,
             function=callback,
         )
@@ -467,36 +471,38 @@ class JAImsAgent:
     def run_tool_model(
         model: str,
         provider: SUPPORTED_PROVIDERS,
-        descriptor: JAImsFunctionToolDescriptor[ModelT],
-        messages: Optional[List[JAImsMessage]] = None,
+        descriptor: FunctionToolDescriptor[ModelT],
+        messages: Optional[List[Message]] = None,
         api_key: Optional[str] = None,
-        options: Optional[JAImsOptions] = None,
-        config: Optional[JAImsLLMConfig] = None,
-        tool_manager: Optional[JAImsToolManager] = None,
+        config: Optional[Config] = None,
+        llm_params: Optional[LLMParams] = None,
+        tool_manager: Optional[ToolManagerITF] = None,
     ) -> ModelT:
         """
-        Runs a single tool with the given messages and returns the expected response data.
+        Runs a single tool with the given messages and returns the expected response data defined by the tool descriptor. Doesn't require an Agent instance.
+
+        This method is useful for inline usage when you don't need to keep the agent instance around. Has the same effect of creating an agent instance and calling the run_tool method.
 
         Args:
             model (str): The model to use.
-            provider (Literal["openai", "google", "mistral", "anthropic","vertex"]): The provider to use.
-            descriptor (JAImsFunctionToolDescriptor): The tool to run.
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
+            provider (Literal): The provider to use (among the supported providers).
+            descriptor (FunctionToolDescriptor): The tool descriptor to use.
+            messages (Optional[List[Message]]): The list of messages. Defaults to None.
             api_key (Optional[str]): The API key. Defaults to None.
-            options (Optional[JAImsOptions]): The options. Defaults to None.
-            config (Optional[JAImsLLMConfig]): The config. Defaults to None.
-            tool_manager (Optional[JAImsToolManager]): The tool manager. Defaults to None.
+            config (Optional[Config]): The config to use. Defaults to None. (When none, the default config will be used).
+            llm_params (Optional[LLMParams]): The llm_params to be used. Defaults to None. (When none, the default llm_params will be used).
+            tool_manager (Optional[ToolManagerITF]): The tool manager. Defaults to None. Usually you don't need to provide a custom tool manager.
 
         Returns:
-            BaseModel: The expected response data defined by the tool descriptor.
+            ModelT: The expected response data defined by the tool descriptor.
         """
 
-        agent = JAImsAgent.build(
+        agent = Agent.build(
             model=model,
             provider=provider,
             api_key=api_key,
-            options=options,
-            config=config,
+            options=config,
+            config=llm_params,
             tool_manager=tool_manager,
         )
 
@@ -504,20 +510,24 @@ class JAImsAgent:
 
     def run_stream(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[JAImsStreamingMessage, None, None]:
+    ) -> Generator[StreamingMessage, None, None]:
         """
         Runs the agent in streaming mode with the given messages and tools and yields the streaming response message.
 
+        Usually this method is used when you're implementing a chat-like interface that has function calling capabilities, and you want to stream the response messages as they come.
+
+        When the agent has been instantiated with tools and tool_constraints and this method receives tools and tool_constraints, the tools and tool_constraints passed to this method will override the ones injected in the constructor, only for this run (they get discarded after the run and those injected in the constructor will be used again).
+
         Args:
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            messages (Optional[List[Message]]): The list of messages. Defaults to None.
+            tools (Optional[List[FunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
             tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Yields:
-            JAImsStreamingMessage: The streaming response message.
+            StreamingMessage: The streaming response message.
         """
 
         messages = messages or []
@@ -557,16 +567,18 @@ class JAImsAgent:
 
     def message(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> Optional[str]:
         """
         Sends the messages to the agent returning the response text, in a chat-like fashion.
 
+        This method is useful when implementing a chat-bot, since you can use the response text directly. Has the same effect of calling the run method and concatenating the response messages.
+
         Args:
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            messages (Optional[List[Message]]): The list of messages. Defaults to None.
+            tools (Optional[List[FunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
             tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Returns:
@@ -587,16 +599,18 @@ class JAImsAgent:
 
     def message_stream(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
     ) -> Generator[str, None, None]:
         """
-        Sends the messages to the agent and streams the response text, in a chat-like fashion.
+        Sends the messages to the agent returning the response text in a chat-like fashion, in a streaming fashion.
+
+        This method is useful when implementing a chat-bot, since you can use the response text directly. Has the same effect of calling the run_stream method and concatenating the response messages.
 
         Args:
-            messages (Optional[List[JAImsMessage]]): The list of messages. Defaults to None.
-            tools (Optional[List[JAImsFunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
+            messages (Optional[List[Message]]): The list of messages. Defaults to None.
+            tools (Optional[List[FunctionTool]]): When passed, the tools will override any tools injected in the constructor, only for this run. When None, the tools injected in the constructor will be used (if any). Defaults to None.
             tool_constraints (Optional[List[str]]): The list of tool identifiers that should be used. When None, the LLM works in agent mode (if supported) and picks the tools to use. Defaults to None.
 
         Yields:
@@ -605,3 +619,8 @@ class JAImsAgent:
 
         for delta_resp in self.run_stream(messages, tools, tool_constraints):
             yield delta_resp.textDelta or ""
+
+
+@deprecated("use Agent instead")
+class JAImsAgent(Agent):
+    pass

@@ -2,9 +2,9 @@ import json
 import os
 import time
 from jaims import (
-    JAImsAgent,
-    JAImsDefaultHistoryManager,
-    JAImsMessage,
+    Agent,
+    DefaultHistoryManager,
+    Message,
     jaimsfunctiontool,
 )
 
@@ -86,9 +86,9 @@ def main():
         ),
     )
 
-    agent = JAImsAgent(
+    agent = Agent(
         llm_interface=adapter,
-        history_manager=JAImsDefaultHistoryManager(),
+        history_manager=DefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )
 
@@ -101,14 +101,14 @@ def main():
 
         if stream:
             response = agent.message_stream(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
             response = agent.message(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             print(response)
 

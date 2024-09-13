@@ -1,7 +1,7 @@
 from jaims import (
-    JAImsAgent,
-    JAImsMessage,
-    JAImsDefaultHistoryManager,
+    Agent,
+    Message,
+    DefaultHistoryManager,
     jaimsfunctiontool,
 )
 
@@ -59,9 +59,9 @@ def main():
         location="europe-west1",
     )
 
-    agent = JAImsAgent(
+    agent = Agent(
         llm_interface=adapter,
-        history_manager=JAImsDefaultHistoryManager(),
+        history_manager=DefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )
 
@@ -74,14 +74,14 @@ def main():
 
         if stream:
             response = agent.message_stream(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
             response = agent.message(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             print(response)
 

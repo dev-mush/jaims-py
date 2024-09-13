@@ -1,11 +1,11 @@
 from jaims import (
-    JAImsMessage,
-    JAImsDefaultHistoryManager,
+    Message,
+    DefaultHistoryManager,
     jaimsfunctiontool,
 )
 
 from jaims.adapters.google_generative_ai_adapter import JAImsGoogleGenerativeAIAdapter
-from jaims.agent import JAImsAgent
+from jaims.agent import Agent
 
 
 @jaimsfunctiontool(
@@ -57,9 +57,9 @@ def main():
         model="gemini-1.5-pro",
     )
 
-    agent = JAImsAgent(
+    agent = Agent(
         llm_interface=adapter,
-        history_manager=JAImsDefaultHistoryManager(),
+        history_manager=DefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )
 
@@ -72,14 +72,14 @@ def main():
 
         if stream:
             response = agent.message_stream(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
             response = agent.message(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             print(response)
 

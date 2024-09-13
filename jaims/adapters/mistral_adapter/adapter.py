@@ -8,21 +8,22 @@ from mistralai.models.chat_completion import (
     ChatCompletionResponse,
     ChatCompletionStreamResponse,
     DeltaMessage,
-    ToolCall,
+    ToolCall as MistralToolCall,
 )
+
 from typing import List, Optional, Dict, Literal
 from PIL import Image
 
-from ...interfaces import JAImsLLMInterface
+from ...interfaces import LLMAdapterITF
 from ...entities import (
-    JAImsImageContent,
-    JAImsContentType,
-    JAImsMessage,
-    JAImsStreamingMessage,
-    JAImsToolCall,
-    JAImsFunctionTool,
-    JAImsMessageRole,
-    JAImsOptions,
+    ImageContent,
+    ContentType,
+    Message,
+    StreamingMessage,
+    ToolCall,
+    FunctionTool,
+    MessageRole,
+    Config,
 )
 from ..shared.image_utilities import image_to_b64
 from ..shared.exponential_backoff_operation import (
@@ -161,7 +162,7 @@ class MistralTransactionStorageInterface(ABC):
         pass
 
 
-class JAImsMistralAdapter(JAImsLLMInterface):
+class JAImsMistralAdapter(LLMAdapterITF):
     """
     The JAIms Mistral adapter.
     """
@@ -169,7 +170,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        options: Optional[JAImsOptions] = None,
+        options: Optional[Config] = None,
         kwargs: Optional[Union[JAImsMistralKWArgs, Dict]] = None,
         kwargs_messages_behavior: Literal["append", "replace"] = "append",
         kwargs_tools_behavior: Literal["append", "replace"] = "append",
@@ -179,7 +180,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
         if not self.api_key:
             raise Exception("Mistral API key not provided.")
 
-        self.options = options or JAImsOptions()
+        self.options = options or Config()
         self.kwargs = kwargs or JAImsMistralKWArgs()
         self.kwargs_messages_behavior = kwargs_messages_behavior
         self.kwargs_tools_behavior = kwargs_tools_behavior
@@ -187,8 +188,8 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
     def __get_args(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
@@ -229,10 +230,10 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
     def call(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> JAImsMessage:
+    ) -> Message:
         args = self.__get_args(
             messages=messages,
             tools=tools,
@@ -250,10 +251,10 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
     def call_streaming(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[JAImsStreamingMessage, None, None]:
+    ) -> Generator[StreamingMessage, None, None]:
         args = self.__get_args(
             messages, tools, stream=True, tool_constraints=tool_constraints
         )
@@ -275,8 +276,8 @@ class JAImsMistralAdapter(JAImsLLMInterface):
                 response=accumulated_delta.model_dump(exclude_none=True),
             )
 
-    def __jaims_messages_to_mistral(self, messages: List[JAImsMessage]) -> List[dict]:
-        def format_contents(contents: List[JAImsContentType]):
+    def __jaims_messages_to_mistral(self, messages: List[Message]) -> List[dict]:
+        def format_contents(contents: List[ContentType]):
             if len(contents) == 1 and isinstance(contents[0], str):
                 return contents[0]
             else:
@@ -284,7 +285,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
                 for c in contents:
                     if isinstance(c, str):
                         raw_contents.append({"type": "text", "text": c})
-                    elif isinstance(c, JAImsImageContent):
+                    elif isinstance(c, ImageContent):
                         url = c.image
                         if isinstance(c.image, Image.Image):
                             mime, b64 = image_to_b64(c.image)
@@ -302,7 +303,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
                 return raw_contents
 
-        def format_tool_calls(tool_calls: List[JAImsToolCall]):
+        def format_tool_calls(tool_calls: List[ToolCall]):
             raw_tool_calls = []
             for tc in tool_calls:
                 raw_tool_call = {
@@ -349,7 +350,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
         return raw_messages
 
-    def __jaims_tools_to_mistral(self, tools: List[JAImsFunctionTool]) -> List[dict]:
+    def __jaims_tools_to_mistral(self, tools: List[FunctionTool]) -> List[dict]:
         raw_tools = []
         for t in tools:
             tool_raw_dict = {
@@ -366,16 +367,16 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
     def __mistral_chat_completion_to_jaims_message(
         self, completion: ChatCompletionResponse
-    ) -> JAImsMessage:
+    ) -> Message:
         if len(completion.choices) == 0:
             raise Exception("Mistral returned an empty response.")
 
         message = completion.choices[0].message
-        role = JAImsMessageRole(message.role)
+        role = MessageRole(message.role)
         tool_calls = None
         if message.tool_calls:
             tool_calls = [
-                JAImsToolCall(
+                ToolCall(
                     id=tc.id,
                     tool_name=tc.function.name,
                     tool_args=json.loads(tc.function.arguments),
@@ -383,7 +384,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
                 for tc in message.tool_calls
             ]
 
-        return JAImsMessage(
+        return Message(
             role=role,
             contents=[message.content] if message.content else None,
             tool_calls=tool_calls,
@@ -394,18 +395,18 @@ class JAImsMistralAdapter(JAImsLLMInterface):
         self,
         accumulated_choice_delta: DeltaMessage,
         current_chunk: ChatCompletionStreamResponse,
-    ) -> JAImsStreamingMessage:
+    ) -> StreamingMessage:
         current_choice = current_chunk.choices[0]
         role = (
-            JAImsMessageRole(current_choice.delta.role)
+            MessageRole(current_choice.delta.role)
             if current_choice.delta.role
             else accumulated_choice_delta.role
         )
         textDelta = current_choice.delta.content
-        contents: Optional[List[JAImsContentType]] = None
+        contents: Optional[List[ContentType]] = None
         function_tool_calls = None
 
-        role = JAImsMessageRole(accumulated_choice_delta.role)
+        role = MessageRole(accumulated_choice_delta.role)
         if accumulated_choice_delta.content:
             contents = [
                 accumulated_choice_delta.content,
@@ -416,7 +417,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
             for tc in accumulated_choice_delta.tool_calls:
                 if tc.function:
                     function_tool_calls.append(
-                        JAImsToolCall(
+                        ToolCall(
                             id=tc.id or "",
                             tool_name=tc.function.name or "",
                             tool_args=(
@@ -427,8 +428,8 @@ class JAImsMistralAdapter(JAImsLLMInterface):
                         )
                     )
 
-        return JAImsStreamingMessage(
-            message=JAImsMessage(
+        return StreamingMessage(
+            message=Message(
                 role=role,
                 contents=contents,
                 tool_calls=function_tool_calls,
@@ -440,7 +441,7 @@ class JAImsMistralAdapter(JAImsLLMInterface):
     def ___get_mistral_response(
         self,
         mistral_kw_args: dict,
-        call_options: JAImsOptions,
+        call_options: Config,
     ) -> Union[ChatCompletionResponse, ChatCompletionStreamResponse]:
         kwargs = mistral_kw_args.copy()
         is_stream = kwargs.pop("stream", False)
@@ -476,8 +477,8 @@ class JAImsMistralAdapter(JAImsLLMInterface):
 
     def __merge_tool_calls(
         self,
-        existing_tool_calls: Optional[List[ToolCall]],
-        new_tool_calls_delta: List[ToolCall],
+        existing_tool_calls: Optional[List[MistralToolCall]],
+        new_tool_calls_delta: List[MistralToolCall],
     ):
         if not existing_tool_calls:
             return new_tool_calls_delta

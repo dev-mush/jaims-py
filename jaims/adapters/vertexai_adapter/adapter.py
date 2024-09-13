@@ -1,12 +1,12 @@
-from ...interfaces import JAImsLLMInterface
+from ...interfaces import LLMAdapterITF
 from ...entities import (
-    JAImsMessage,
-    JAImsFunctionTool,
-    JAImsToolCall,
-    JAImsMessageRole,
-    JAImsImageContent,
-    JAImsStreamingMessage,
-    JAImsOptions,
+    Message,
+    FunctionTool,
+    ToolCall,
+    MessageRole,
+    ImageContent,
+    StreamingMessage,
+    Config,
 )
 from ..shared.image_utilities import image_to_bytes
 from ..shared.exponential_backoff_operation import (
@@ -34,7 +34,7 @@ from vertexai.generative_models import Image as VertexImage
 from vertexai.generative_models._generative_models import ContentsType
 
 
-class JAImsVertexAIAdapter(JAImsLLMInterface):
+class JAImsVertexAIAdapter(LLMAdapterITF):
     def __init__(
         self,
         project_id: str,
@@ -42,7 +42,7 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
         model_name: str,
         generation_config: Optional[Union[GenerationConfig, Dict[str, Any]]] = None,
         safety_settings: Optional[List[SafetySetting]] = None,
-        options: Optional[JAImsOptions] = None,
+        options: Optional[Config] = None,
     ):
         vertexai.init(project=project_id, location=location)
 
@@ -51,24 +51,24 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
         self.model_name = model_name
         self.safety_settings = safety_settings
         self.generation_config = generation_config
-        self.options = options or JAImsOptions()
+        self.options = options or Config()
 
     def call(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> JAImsMessage:
+    ) -> Message:
         response = self.__get_gemini_response(messages, tools, tool_constraints)
         _, message = self.__gemini_to_jaims_message(response)
         return message
 
     def call_streaming(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[JAImsStreamingMessage, None, None]:
+    ) -> Generator[StreamingMessage, None, None]:
         response = self.__get_gemini_response(
             messages, tools, stream=True, tool_constraints=tool_constraints
         )
@@ -88,19 +88,19 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
                         existing_text + text_delta if existing_text else text_delta
                     )
 
-                yield JAImsStreamingMessage(
+                yield StreamingMessage(
                     textDelta=text_delta,
                     message=message,
                 )
 
-    def __jaims_role_to_gemini(self, role: JAImsMessageRole) -> str:
-        if role == JAImsMessageRole.USER:
+    def __jaims_role_to_gemini(self, role: MessageRole) -> str:
+        if role == MessageRole.USER:
             return "user"
         else:
             return "model"
 
     def __jaims_tools_to_gemini(
-        self, jaims_tools: Optional[List[JAImsFunctionTool]] = None
+        self, jaims_tools: Optional[List[FunctionTool]] = None
     ) -> Optional[List[Tool]]:
 
         if not jaims_tools:
@@ -123,13 +123,13 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
         return [Tool(function_declarations=function_declarations)]
 
     def __jaims_messages_to_gemini(
-        self, jaims_messages: List[JAImsMessage]
+        self, jaims_messages: List[Message]
     ) -> tuple[List[str], ContentsType]:
         gemini_messages = []
         system_instruction = []
 
         for jaims_message in jaims_messages:
-            if jaims_message.role == JAImsMessageRole.SYSTEM:
+            if jaims_message.role == MessageRole.SYSTEM:
                 system_instruction.append(jaims_message.get_text())
                 continue
 
@@ -140,7 +140,7 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
                 for content in jaims_message.contents:
                     if isinstance(content, str):
                         parts.append(Part.from_text(content))
-                    if isinstance(content, JAImsImageContent):
+                    if isinstance(content, ImageContent):
                         if isinstance(content.image, str):
                             raise ValueError("Image URL not supported")
                         elif isinstance(content.image, Image.Image):
@@ -187,11 +187,11 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
         self,
         response: GenerationResponse,
         existing_text: Optional[str] = None,
-        existing_tool_calls: Optional[List[JAImsToolCall]] = None,
-    ) -> Tuple[Optional[str], JAImsMessage]:
+        existing_tool_calls: Optional[List[ToolCall]] = None,
+    ) -> Tuple[Optional[str], Message]:
         assert response.candidates is not None
 
-        role = JAImsMessageRole.ASSISTANT
+        role = MessageRole.ASSISTANT
         tool_calls = existing_tool_calls or []
         contents = []
         candidate = response.candidates[0]
@@ -203,7 +203,7 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
                     for k, v in fn.args.items():
                         args[k] = v
                     tool_calls.append(
-                        JAImsToolCall(
+                        ToolCall(
                             id=fn.name,
                             tool_name=fn.name,
                             tool_args=args,
@@ -220,7 +220,7 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
         if existing_text:
             contents.append(existing_text)
 
-        return text_delta, JAImsMessage(
+        return text_delta, Message(
             role=role,
             contents=contents,
             tool_calls=tool_calls,
@@ -229,8 +229,8 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
 
     def __get_gemini_response(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):

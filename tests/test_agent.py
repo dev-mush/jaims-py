@@ -1,34 +1,34 @@
 import unittest
 from unittest.mock import MagicMock, call
-from jaims.agent import JAImsAgent
+from jaims.agent import Agent
 from jaims.entities import (
-    JAImsMessage,
-    JAImsMessageRole,
+    Message,
+    MessageRole,
 )
 
-from jaims.interfaces import JAImsLLMInterface, JAImsHistoryManager, JAImsToolManager
+from jaims.interfaces import LLMAdapterITF, HistoryManagerITF, ToolManagerITF
 
 
 class TestJAImsAgent(unittest.TestCase):
     def setUp(self):
-        self.llm_interface = MagicMock(spec=JAImsLLMInterface)
-        self.history_manager = MagicMock(spec=JAImsHistoryManager)
-        self.tool_manager = MagicMock(spec=JAImsToolManager)
+        self.llm_interface = MagicMock(spec=LLMAdapterITF)
+        self.history_manager = MagicMock(spec=HistoryManagerITF)
+        self.tool_manager = MagicMock(spec=ToolManagerITF)
         self.tools = MagicMock()
-        self.mock_message = JAImsMessage(
-            role=JAImsMessageRole.USER,
+        self.mock_message = Message(
+            role=MessageRole.USER,
             contents=[
                 "Hello",
             ],
         )
 
-        self.mock_message_response = JAImsMessage(
-            role=JAImsMessageRole.ASSISTANT,
+        self.mock_message_response = Message(
+            role=MessageRole.ASSISTANT,
             contents=[
                 "World",
             ],
         )
-        self.mock_message_response_tool_calls = JAImsMessage.tool_call_message(
+        self.mock_message_response_tool_calls = Message.tool_call_message(
             tool_calls=[MagicMock()]
         )
         self.mock_tools = MagicMock()
@@ -44,7 +44,7 @@ class TestJAImsAgent(unittest.TestCase):
     def test_run_no_messages(self):
         self.llm_interface.call.return_value = self.mock_message_response
 
-        sut = JAImsAgent(
+        sut = Agent(
             llm_interface=self.llm_interface,
         )
 
@@ -55,7 +55,7 @@ class TestJAImsAgent(unittest.TestCase):
     def test_run_messages_and_tools(self):
         self.llm_interface.call.return_value = self.mock_message_response
 
-        sut = JAImsAgent(
+        sut = Agent(
             llm_interface=self.llm_interface,
             tools=self.mock_tools,
         )
@@ -71,7 +71,7 @@ class TestJAImsAgent(unittest.TestCase):
         self.llm_interface.call.return_value = self.mock_message_response
         self.history_manager.get_messages.return_value = mock_history_return
 
-        sut = JAImsAgent(
+        sut = Agent(
             llm_interface=self.llm_interface,
             history_manager=self.history_manager,
             tools=self.mock_tools,
@@ -101,7 +101,7 @@ class TestJAImsAgent(unittest.TestCase):
         ]
         self.tool_manager.handle_tool_calls.return_value = [tool_response_mock]
 
-        sut = JAImsAgent(
+        sut = Agent(
             llm_interface=self.llm_interface,
             tool_manager=self.tool_manager,
             tools=self.mock_tools,
@@ -118,7 +118,7 @@ class TestJAImsAgent(unittest.TestCase):
         self.llm_interface.call.return_value = self.mock_message_response_tool_calls
         self.tool_manager.handle_tool_calls.return_value = []
 
-        sut = JAImsAgent(
+        sut = Agent(
             llm_interface=self.llm_interface,
             tool_manager=self.tool_manager,
             tools=self.mock_tools,
