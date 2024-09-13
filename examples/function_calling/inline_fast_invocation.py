@@ -8,6 +8,8 @@ from jaims import (
 )
 from typing import List, Optional
 
+from jaims.entities import Config
+
 
 class PersonRecord(BaseModel):
     name: str = Field(description="the name of a person")
@@ -41,13 +43,25 @@ In the quaint village of Maplewood, four friends often gathered at the old town 
 if __name__ == "__main__":
 
     # run tool on agent instance
+    model = "claude-3-5-sonnet@20240620"
+    provider = "vertex"
+
     agent = Agent.build(
-        model="gpt-4-turbo",
-        provider="openai",
+        model=model,
+        provider=provider,
+        config=Config(
+            platform_specific_options={
+                "project_id": "your-project-id",
+                "region": "europe-west1",
+            }
+        ),
     )
 
     people = agent.run_tool(
-        extract_people, messages=[Message.user_message(unstructured_text)]
+        extract_people,
+        messages=[
+            Message.user_message(unstructured_text),
+        ],
     )
 
     print(json.dumps(people.model_dump(), indent=4))

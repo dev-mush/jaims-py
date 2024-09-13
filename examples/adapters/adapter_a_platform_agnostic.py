@@ -41,7 +41,7 @@ def store_result(result: int):
 
 def main():
     stream = True
-    model = "gemini-1.5-pro"
+    model = "claude-3-5-sonnet@20240620"
     provider = "vertex"
 
     agent = Agent.build(
