@@ -4,7 +4,7 @@ from jaims import (
     jaimsfunctiontool,
 )
 
-from jaims.adapters.google_generative_ai_adapter import JAImsGoogleGenerativeAIAdapter
+from jaims.adapters.google_generative_ai_adapter import GoogleGenerativeAIAdapter
 from jaims.agent import Agent
 
 
@@ -53,7 +53,7 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    adapter = JAImsGoogleGenerativeAIAdapter(
+    adapter = GoogleGenerativeAIAdapter(
         model="gemini-1.5-pro",
     )
 

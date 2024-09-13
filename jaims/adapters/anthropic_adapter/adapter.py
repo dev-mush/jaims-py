@@ -41,7 +41,23 @@ import os
 from copy import deepcopy
 
 
-class JAImsAnthropicKWArgs:
+class AnthropicParams:
+    """
+    Model parameters for the Anthropic API.
+
+    Args:
+        model (str, optional): The model to use. Defaults to "claude-3-opus-20240229".
+        max_tokens (int, optional): The maximum number of tokens to generate. Defaults to 1024.
+        temperature (float, optional): The sampling temperature. Defaults to 0.7.
+        top_p (Optional[float], optional): The nucleus sampling parameter. Defaults to None.
+        stop_sequences (Optional[List[str]], optional): A list of sequences to stop generation at. Defaults to None.
+        metadata (Optional[Dict[str, str]], optional): Metadata to include with the message. Defaults to None.
+        tool_choice (Optional[ToolChoice], optional): The tool choice to use. Defaults to None.
+
+    Returns:
+        AnthropicParams: The model parameters for the Anthropic API.
+    """
+
     def __init__(
         self,
         model: str = "claude-3-opus-20240229",
@@ -61,6 +77,12 @@ class JAImsAnthropicKWArgs:
         self.tool_choice = tool_choice
 
     def to_dict(self):
+        """
+        Convert the parameters to a dictionary.
+
+        Returns:
+            dict: The parameters as a dictionary.
+        """
         kwargs = {
             "model": self.model,
             "max_tokens": self.max_tokens,
@@ -73,33 +95,67 @@ class JAImsAnthropicKWArgs:
         return {k: v for k, v in kwargs.items() if v is not None}
 
     @staticmethod
-    def from_dict(kwargs: dict) -> JAImsAnthropicKWArgs:
-        return JAImsAnthropicKWArgs(**kwargs)
+    def from_dict(kwargs: dict) -> AnthropicParams:
+        """
+        Create an instance of AnthropicParams from a dictionary.
 
-    def copy_with_overrides(self, **kwargs) -> JAImsAnthropicKWArgs:
+        Args:
+            kwargs (dict): The dictionary of parameters.
+
+        Returns:
+            AnthropicParams: The model parameters for the Anthropic API.
+        """
+        return AnthropicParams(**kwargs)
+
+    def copy_with_overrides(self, **kwargs) -> AnthropicParams:
+        """
+        Create a copy of the parameters with the specified overrides.
+
+        Args:
+            **kwargs: The parameters to override.
+
+        Returns:
+            AnthropicParams: The model parameters for the Anthropic API.
+        """
+
         new_kwargs = self.to_dict()
         new_kwargs.update(kwargs)
-        return JAImsAnthropicKWArgs.from_dict(new_kwargs)
+        return AnthropicParams.from_dict(new_kwargs)
 
 
-class JAImsAnthropicAdapter(LLMAdapterITF):
+class AnthropicAdapter(LLMAdapterITF):
+    """
+    Adapter for the Anthropic API.
+    """
+
     def __init__(
         self,
         api_key: Optional[str] = None,
-        options: Optional[Config] = None,
-        kwargs: Optional[Union[JAImsAnthropicKWArgs, Dict]] = None,
+        config: Optional[Config] = None,
+        params: Optional[Union[AnthropicParams, Dict]] = None,
         provider: Literal["anthropic", "vertex"] = "anthropic",
-        kwargs_messages_behavior: Literal["append", "replace"] = "append",
-        kwargs_tools_behavior: Literal["append", "replace"] = "append",
+        existing_params_messages_behaviour: Literal["append", "replace"] = "append",
+        existing_tools_behavior: Literal["append", "replace"] = "append",
     ):
+        """
+        Returns an instance of the AnthropicAdapter.
+
+        Args:
+            api_key (Optional[str], optional): The API key for the Anthropic API. Defaults to None.
+            config (Optional[Config], optional): The configuration for the adapter. Defaults to None.
+            params (Optional[Union[AnthropicParams, Dict]], optional): The model parameters for the Anthropic API. Defaults to None.
+            provider (Literal["anthropic", "vertex"], optional): The provider to use. Defaults to "anthropic".
+            existing_params_messages_behaviour (Literal["append", "replace"], optional): The behavior for the messages in the kwargs when receiving new messages on calls. Defaults to "append", which appends new messages to the params passed in the constructor.
+            existing_tools_behaviour (Literal["append", "replace"], optional): The behavior for the tools in the kwargs when receiving new tools on calls. Defaults to "append", which appends new tools to the params passed in the constructor.
+        """
         self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         if not self.api_key:
             raise Exception("Anthropic API key not provided.")
 
-        self.options = options or Config()
-        self.kwargs = kwargs or JAImsAnthropicKWArgs()
-        self.kwargs_messages_behavior = kwargs_messages_behavior
-        self.kwargs_tools_behavior = kwargs_tools_behavior
+        self.conrig = config or Config()
+        self.params = params or AnthropicParams()
+        self.existing_params_messages_behaviour = existing_params_messages_behaviour
+        self.existing_tools_behavior = existing_tools_behavior
         self.provider = provider
 
     def __get_args(
@@ -109,13 +165,13 @@ class JAImsAnthropicAdapter(LLMAdapterITF):
         tool_constraints: Optional[List[str]] = None,
     ):
 
-        if isinstance(self.kwargs, JAImsAnthropicKWArgs):
-            args = self.kwargs.to_dict()
+        if isinstance(self.params, AnthropicParams):
+            args = self.params.to_dict()
         else:
-            args = deepcopy(self.kwargs)
+            args = deepcopy(self.params)
 
         sys_message, claude_messages = self.__jaims_messages_to_claude(messages or [])
-        if self.kwargs_messages_behavior == "append":
+        if self.existing_params_messages_behaviour == "append":
             kwargs_messages = args.get("messages", [])
             claude_messages = kwargs_messages + claude_messages
             existing_sys_message = args.get("system", None)
@@ -133,7 +189,7 @@ class JAImsAnthropicAdapter(LLMAdapterITF):
 
         claude_tools = self.__jaims_tools_to_claude(tools or [])
 
-        if self.kwargs_tools_behavior == "append":
+        if self.existing_tools_behavior == "append":
             claude_tools = args.get("tools", []) + claude_tools
 
         if len(claude_tools) > 0:
@@ -161,8 +217,8 @@ class JAImsAnthropicAdapter(LLMAdapterITF):
         if self.provider == "anthropic":
             client = Anthropic(
                 api_key=self.api_key,
-                max_retries=self.options.max_retries,
-                **self.options.platform_specific_options,
+                max_retries=self.conrig.max_retries,
+                **self.conrig.platform_specific_options,
             )
             response = client.messages.create(**args)
 
@@ -170,8 +226,8 @@ class JAImsAnthropicAdapter(LLMAdapterITF):
             from anthropic import AnthropicVertex
 
             client = AnthropicVertex(
-                max_retries=self.options.max_retries,
-                **self.options.platform_specific_options,
+                max_retries=self.conrig.max_retries,
+                **self.conrig.platform_specific_options,
             )
             response = client.messages.create(**args)
 
@@ -190,15 +246,15 @@ class JAImsAnthropicAdapter(LLMAdapterITF):
             if self.provider == "anthropic":
                 client = AsyncAnthropic(
                     api_key=self.api_key,
-                    max_retries=self.options.max_retries,
-                    **self.options.platform_specific_options,
+                    max_retries=self.conrig.max_retries,
+                    **self.conrig.platform_specific_options,
                 )
             elif self.provider == "vertex":
                 from anthropic import AsyncAnthropicVertex
 
                 client = AsyncAnthropicVertex(
-                    max_retries=self.options.max_retries,
-                    **self.options.platform_specific_options,
+                    max_retries=self.conrig.max_retries,
+                    **self.conrig.platform_specific_options,
                 )
 
             async with client.messages.stream(**args) as stream:

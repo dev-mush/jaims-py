@@ -10,12 +10,12 @@ from jaims import (
 
 
 from jaims.adapters.mistral_adapter import (
-    JAImsMistralKWArgs,
+    MistralParams,
     MistralTransactionStorageInterface,
 )
 
 
-from jaims.adapters.mistral_adapter import JAImsMistralAdapter
+from jaims.adapters.mistral_adapter import MistralAdapter
 
 
 @jaimsfunctiontool(
@@ -79,8 +79,8 @@ class FileTransactionStorage(MistralTransactionStorageInterface):
 def main():
     stream = True
 
-    adapter = JAImsMistralAdapter(
-        kwargs=JAImsMistralKWArgs(
+    adapter = MistralAdapter(
+        kwargs=MistralParams(
             model="mistral-large-latest",
             stream=stream,
         ),

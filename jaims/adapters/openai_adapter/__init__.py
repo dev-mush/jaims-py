@@ -1,13 +1,11 @@
 from .adapter import (
-    JAImsOpenaiKWArgs,
-    JAImsTokenHistoryOptimizer,
-    OpenAITransactionStorageInterface,
-    JAImsOpenaiAdapter,
+    OpenAIParams,
+    OpenAITokenHistoryOptimizer,
+    OpenaiAdapter,
 )
 
 __all__ = [
-    "JAImsOpenaiKWArgs",
-    "JAImsTokenHistoryOptimizer",
-    "OpenAITransactionStorageInterface",
-    "JAImsOpenaiAdapter",
+    "OpenAIParams",
+    "OpenAITokenHistoryOptimizer",
+    "OpenaiAdapter",
 ]

@@ -1,12 +1,10 @@
 from .adapter import (
-    JAImsMistralKWArgs,
-    MistralTransactionStorageInterface,
-    JAImsMistralAdapter,
+    MistralParams,
+    MistralAdapter,
 )
 
 
 __all__ = [
-    "JAImsMistralKWArgs",
-    "MistralTransactionStorageInterface",
-    "JAImsMistralAdapter",
+    "MistralParams",
+    "MistralAdapter",
 ]

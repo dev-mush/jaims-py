@@ -25,21 +25,34 @@ from google.generativeai.types import generation_types
 import google.ai.generativelanguage as glm
 
 
-class JAImsGoogleGenerativeAIAdapter(LLMAdapterITF):
+class GoogleGenerativeAIAdapter(LLMAdapterITF):
+    """
+    Adapter for Google Generative AI models.
+    """
+
     def __init__(
         self,
         model: str,
         generation_config: Optional[generation_types.GenerationConfigType] = None,
-        options: Optional[Config] = None,
+        config: Optional[Config] = None,
         api_key: Optional[str] = None,
     ):
+        """
+        Returns a new instance of the GoogleGenerativeAIAdapter.
+
+        Args:
+            model (str): The model to use.
+            generation_config (Optional[generation_types.GenerationConfigType], optional): The generation config. Defaults to None.
+            config (Optional[Config], optional): The configuration options. Defaults to None.
+            api_key (Optional[str], optional): The Google API key. Defaults to None.
+        """
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
             raise Exception("GOOGLE_API_KEY not provided.")
 
         self.model = model
         self.generation_config = generation_config
-        self.options = options or Config()
+        self.config = config or Config()
 
     def call(
         self,
@@ -262,5 +275,5 @@ class JAImsGoogleGenerativeAIAdapter(LLMAdapterITF):
             )
 
         return call_with_exponential_backoff(
-            call_gemini, handle_gemini_error, self.options
+            call_gemini, handle_gemini_error, self.config
         )

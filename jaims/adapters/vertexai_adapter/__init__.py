@@ -1,5 +1,5 @@
-from .adapter import JAImsVertexAIAdapter
+from .adapter import VertexAIAdapter
 
 __all__ = [
-    "JAImsVertexAIAdapter",
+    "VertexAIAdapter",
 ]

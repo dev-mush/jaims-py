@@ -47,13 +47,13 @@ def main():
     agent = Agent.build(
         model=model,
         provider=provider,
-        options=Config(
+        config=Config(
             platform_specific_options={
                 "project_id": "your-project-id",
                 "location": "europe-west1",
             }
         ),
-        config=LLMParams(
+        llm_params=LLMParams(
             temperature=0.5,
             max_tokens=2000,
         ),

@@ -5,8 +5,8 @@ from jaims import (
 )
 
 from jaims.adapters.anthropic_adapter import (
-    JAImsAnthropicAdapter,
-    JAImsAnthropicKWArgs,
+    AnthropicAdapter,
+    AnthropicParams,
 )
 from jaims.agent import Agent
 
@@ -56,8 +56,8 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    adapter = JAImsAnthropicAdapter(
-        kwargs=JAImsAnthropicKWArgs(model="claude-3-5-sonnet-20240620"),
+    adapter = AnthropicAdapter(
+        params=AnthropicParams(model="claude-3-5-sonnet-20240620"),
     )
 
     agent = Agent(

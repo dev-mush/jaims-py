@@ -1,8 +1,8 @@
 from .adapter import (
-    JAImsGoogleGenerativeAIAdapter,
+    GoogleGenerativeAIAdapter,
 )
 
 
 __all__ = [
-    "JAImsGoogleGenerativeAIAdapter",
+    "GoogleGenerativeAIAdapter",
 ]

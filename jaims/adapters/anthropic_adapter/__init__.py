@@ -1,10 +1,10 @@
 from .adapter import (
-    JAImsAnthropicKWArgs,
-    JAImsAnthropicAdapter,
+    AnthropicParams,
+    AnthropicAdapter,
 )
 
 
 __all__ = [
-    "JAImsAnthropicKWArgs",
-    "JAImsAnthropicAdapter",
+    "AnthropicParams",
+    "AnthropicAdapter",
 ]

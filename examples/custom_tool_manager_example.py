@@ -13,8 +13,8 @@ from jaims import (
 )
 
 from jaims.adapters.openai_adapter import (
-    JAImsOpenaiKWArgs,
-    JAImsOpenaiAdapter,
+    OpenAIParams,
+    OpenaiAdapter,
 )
 
 
@@ -73,10 +73,10 @@ class MyCustomToolManager(ToolManagerITF):
                     raise ValueError("Agent not bound to the tool manager")
 
                 openai_adapter = self.agent.llm_interface
-                assert isinstance(openai_adapter, JAImsOpenaiAdapter)
+                assert isinstance(openai_adapter, OpenaiAdapter)
                 current_kwargs = openai_adapter.kwargs
                 if isinstance(current_kwargs, dict):
-                    current_kwargs = JAImsOpenaiKWArgs.from_dict(current_kwargs)
+                    current_kwargs = OpenAIParams.from_dict(current_kwargs)
 
                 new_model = (
                     "gpt-4o" if current_kwargs.model == "gpt-4-turbo" else "gpt-4-turbo"

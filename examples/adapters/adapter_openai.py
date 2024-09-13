@@ -5,7 +5,7 @@ from jaims import (
     jaimsfunctiontool,
 )
 
-from jaims.adapters.openai_adapter import JAImsOpenaiAdapter, JAImsOpenaiKWArgs
+from jaims.adapters.openai_adapter import OpenaiAdapter, OpenAIParams
 
 
 @jaimsfunctiontool(
@@ -53,8 +53,8 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    adapter = JAImsOpenaiAdapter(
-        kwargs=JAImsOpenaiKWArgs(
+    adapter = OpenaiAdapter(
+        kwargs=OpenAIParams(
             model="gpt-4o",
             stream=stream,
         ),

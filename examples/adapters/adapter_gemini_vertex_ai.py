@@ -5,7 +5,7 @@ from jaims import (
     jaimsfunctiontool,
 )
 
-from jaims.adapters.vertexai_adapter import JAImsVertexAIAdapter
+from jaims.adapters.vertexai_adapter import VertexAIAdapter
 
 
 @jaimsfunctiontool(
@@ -53,7 +53,7 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    adapter = JAImsVertexAIAdapter(
+    adapter = VertexAIAdapter(
         model_name="gemini-1.5-pro",
         project_id="your-project-id",
         location="europe-west1",

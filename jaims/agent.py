@@ -215,8 +215,8 @@ class Agent:
         model: str,
         provider: SUPPORTED_PROVIDERS,
         api_key: Optional[str] = None,
-        options: Optional[Config] = None,
-        config: Optional[LLMParams] = None,
+        config: Optional[Config] = None,
+        llm_params: Optional[LLMParams] = None,
         history_manager: Optional[HistoryManagerITF] = None,
         tool_manager: Optional[ToolManagerITF] = None,
         tools: Optional[List[FunctionTool]] = None,
@@ -239,8 +239,8 @@ class Agent:
             model (str): The model to use.
             provider (SUPPORTED_PROVIDERS): The provider to use.
             api_key (Optional[str]): The API key. Defaults to None.
-            options (Optional[Options]): The options. Defaults to None.
-            config (Optional[LLMParams]): The params to be sent to the LLM Interface at each call. Defaults to None.
+            config (Optional[Config]): The config to use. Defaults to None. (When none, the default config will be used).
+            llm_params (Optional[LLMParams]): The llm_params to be used. Defaults to None. (When none, the default llm_params will be used).
             history_manager (Optional[HistoryManager]): The history manager. Defaults to None. Use DefaultHistoryManager to implement chat-like behavior.
             tool_manager (Optional[ToolManager]): The tool manager. Defaults to None. Usually you don't need to provide a custom tool manager.
             tools (Optional[List[FunctionTool]]): The list of tools. Defaults to None. You can pass tools here so they are defined just once, or pass them when invoking the agent for each run.
@@ -260,8 +260,8 @@ class Agent:
             return openai_factory(
                 model=model,
                 api_key=api_key,
-                config=options,
-                llm_params=config,
+                config=config,
+                llm_params=llm_params,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -273,8 +273,8 @@ class Agent:
             return google_factory(
                 model=model,
                 api_key=api_key,
-                config=options,
-                llm_params=config,
+                config=config,
+                llm_params=llm_params,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -286,8 +286,8 @@ class Agent:
             return mistral_factory(
                 model=model,
                 api_key=api_key,
-                config=options,
-                llm_params=config,
+                config=config,
+                llm_params=llm_params,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -299,8 +299,8 @@ class Agent:
             return anthropic_factory(
                 model=model,
                 api_key=api_key,
-                config=options,
-                llm_params=config,
+                config=config,
+                llm_params=llm_params,
                 history_manager=history_manager,
                 tool_manager=tool_manager,
                 tools=tools,
@@ -316,8 +316,8 @@ class Agent:
                     model=model,
                     api_key=api_key,
                     provider="vertex",
-                    config=options,
-                    llm_params=config,
+                    config=config,
+                    llm_params=llm_params,
                     history_manager=history_manager,
                     tool_manager=tool_manager,
                     tools=tools,
@@ -330,8 +330,8 @@ class Agent:
                 return vertex_ai_factory(
                     model=model,
                     api_key=api_key,
-                    config=options,
-                    llm_params=config,
+                    config=config,
+                    llm_params=llm_params,
                     history_manager=history_manager,
                     tool_manager=tool_manager,
                     tools=tools,
@@ -423,8 +423,8 @@ class Agent:
             model=model,
             provider=provider,
             api_key=api_key,
-            options=config,
-            config=llm_params,
+            config=config,
+            llm_params=llm_params,
             tool_manager=tool_manager,
             tools=tools,
         )
@@ -501,8 +501,8 @@ class Agent:
             model=model,
             provider=provider,
             api_key=api_key,
-            options=config,
-            config=llm_params,
+            config=config,
+            llm_params=llm_params,
             tool_manager=tool_manager,
         )
 

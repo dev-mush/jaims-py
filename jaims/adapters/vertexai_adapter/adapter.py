@@ -34,7 +34,11 @@ from vertexai.generative_models import Image as VertexImage
 from vertexai.generative_models._generative_models import ContentsType
 
 
-class JAImsVertexAIAdapter(LLMAdapterITF):
+class VertexAIAdapter(LLMAdapterITF):
+    """
+    Adapter for VertexAI's Generative Models API.
+    """
+
     def __init__(
         self,
         project_id: str,
@@ -42,8 +46,19 @@ class JAImsVertexAIAdapter(LLMAdapterITF):
         model_name: str,
         generation_config: Optional[Union[GenerationConfig, Dict[str, Any]]] = None,
         safety_settings: Optional[List[SafetySetting]] = None,
-        options: Optional[Config] = None,
+        config: Optional[Config] = None,
     ):
+        """
+        Returns a new VertexAIAdapter instance.
+
+        Args:
+            project_id (str): The Google Cloud project ID.
+            location (str): The location of the model.
+            model_name (str): The name of the model to use.
+            generation_config (Optional[Union[GenerationConfig, Dict[str, Any]]], optional): The generation config to use. Defaults to None.
+            safety_settings (Optional[List[SafetySetting]], optional): The safety settings to use. Defaults to None.
+            config (Optional[Config], optional): The configuration to use. Defaults to None.
+        """
         vertexai.init(project=project_id, location=location)
 
         self.project_id = project_id
@@ -51,7 +66,7 @@ class JAImsVertexAIAdapter(LLMAdapterITF):
         self.model_name = model_name
         self.safety_settings = safety_settings
         self.generation_config = generation_config
-        self.options = options or Config()
+        self.config = config or Config()
 
     def call(
         self,
@@ -282,5 +297,5 @@ class JAImsVertexAIAdapter(LLMAdapterITF):
             )
 
         return call_with_exponential_backoff(
-            call_gemini, handle_gemini_error, self.options
+            call_gemini, handle_gemini_error, self.config
         )

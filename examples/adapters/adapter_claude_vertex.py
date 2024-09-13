@@ -5,8 +5,8 @@ from jaims import (
     Config,
 )
 from jaims.adapters.anthropic_adapter.adapter import (
-    JAImsAnthropicAdapter,
-    JAImsAnthropicKWArgs,
+    AnthropicAdapter,
+    AnthropicParams,
 )
 from jaims.agent import Agent
 
@@ -56,10 +56,10 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    adapter = JAImsAnthropicAdapter(
+    adapter = AnthropicAdapter(
         provider="vertex",
-        kwargs=JAImsAnthropicKWArgs(model="claude-3-5-sonnet@20240620"),
-        options=Config(
+        params=AnthropicParams(model="claude-3-5-sonnet@20240620"),
+        config=Config(
             platform_specific_options={
                 "region": "europe-west1",
                 "project_id": "your-project-id",

@@ -35,13 +35,13 @@ def openai_factory(
         Agent: An instance of JAIms Agent configured with the OpenAI model.
 
     """
-    from .adapters.openai_adapter import JAImsOpenaiKWArgs, JAImsOpenaiAdapter
+    from .adapters.openai_adapter import OpenAIParams, OpenaiAdapter
 
     llm_params = llm_params or LLMParams()
     config = config or Config()
     tool_choice = None
 
-    kwargs = JAImsOpenaiKWArgs().copy_with_overrides(
+    kwargs = OpenAIParams().copy_with_overrides(
         model=model,
         temperature=llm_params.temperature,
         max_tokens=llm_params.max_tokens,
@@ -49,7 +49,7 @@ def openai_factory(
         tool_choice=tool_choice,
     )
 
-    adapter = JAImsOpenaiAdapter(
+    adapter = OpenaiAdapter(
         api_key=api_key,
         options=config,
         kwargs=kwargs,
@@ -93,7 +93,7 @@ def google_factory(
         Agent: An instance of JAIms Agent configured with the Google model.
     """
 
-    from .adapters.google_generative_ai_adapter import JAImsGoogleGenerativeAIAdapter
+    from .adapters.google_generative_ai_adapter import GoogleGenerativeAIAdapter
     from google.generativeai.types import generation_types
 
     llm_params = llm_params or LLMParams()
@@ -105,7 +105,7 @@ def google_factory(
         response_schema=llm_params.response_format,
     )
 
-    adapter = JAImsGoogleGenerativeAIAdapter(
+    adapter = GoogleGenerativeAIAdapter(
         api_key=api_key,
         model=model,
         generation_config=generation_config,
@@ -149,13 +149,13 @@ def mistral_factory(
         Agent: An instance of JAIms Agent configured with the Mistral model.
 
     """
-    from .adapters.mistral_adapter import JAImsMistralKWArgs, JAImsMistralAdapter
+    from .adapters.mistral_adapter import MistralParams, MistralAdapter
 
     llm_params = llm_params or LLMParams()
     config = config or Config()
     tool_choice = None
 
-    kwargs = JAImsMistralKWArgs().copy_with_overrides(
+    kwargs = MistralParams().copy_with_overrides(
         model=model,
         temperature=llm_params.temperature,
         max_tokens=llm_params.max_tokens,
@@ -163,7 +163,7 @@ def mistral_factory(
         tool_choice=tool_choice,
     )
 
-    adapter = JAImsMistralAdapter(
+    adapter = MistralAdapter(
         api_key=api_key,
         options=config,
         kwargs=kwargs,
@@ -211,22 +211,22 @@ def anthropic_factory(
     Returns:
         Agent: An instance of JAIms Agent configured with the Anthropic model.
     """
-    from .adapters.anthropic_adapter import JAImsAnthropicKWArgs, JAImsAnthropicAdapter
+    from .adapters.anthropic_adapter import AnthropicParams, AnthropicAdapter
 
     llm_params = llm_params or LLMParams()
     config = config or Config()
 
-    kwargs = JAImsAnthropicKWArgs().copy_with_overrides(
+    kwargs = AnthropicParams().copy_with_overrides(
         model=model,
         temperature=llm_params.temperature,
         max_tokens=llm_params.max_tokens,
     )
 
-    adapter = JAImsAnthropicAdapter(
+    adapter = AnthropicAdapter(
         api_key=api_key,
         provider=provider,
-        options=config,
-        kwargs=kwargs,
+        config=config,
+        params=kwargs,
     )
 
     agent = Agent(
@@ -267,7 +267,7 @@ def vertex_ai_factory(
         Agent: An instance of JAIms Agent configured with the Vertex AI model.
     """
 
-    from .adapters.vertexai_adapter import JAImsVertexAIAdapter
+    from .adapters.vertexai_adapter import VertexAIAdapter
     from vertexai.generative_models import GenerationConfig
 
     if not config:
@@ -290,12 +290,12 @@ def vertex_ai_factory(
         response_schema=llm_params.response_format,
     )
 
-    adapter = JAImsVertexAIAdapter(
+    adapter = VertexAIAdapter(
         project_id=project_id,
         location=location,
         model_name=model,
         generation_config=generation_config,
-        options=config,
+        config=config,
     )
 
     agent = Agent(

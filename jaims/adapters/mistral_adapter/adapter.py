@@ -39,7 +39,7 @@ from copy import deepcopy
 # ---------------------
 
 
-class JAImsMistralKWArgs:
+class MistralParams:
     """
     Represents the keyword arguments for the JAIms Mistral wrapper.
     This class entirely mirrors the Mistral API parameters, so refer to it for documentation.
@@ -85,6 +85,12 @@ class JAImsMistralKWArgs:
         self.tools = tools
 
     def to_dict(self):
+        """
+        Returns the keyword arguments as a dictionary.
+
+        Returns:
+            dict: The keyword arguments as a dictionary.
+        """
         kwargs = {
             "model": self.model,
             "temperature": self.temperature,
@@ -105,8 +111,18 @@ class JAImsMistralKWArgs:
         return kwargs
 
     @staticmethod
-    def from_dict(kwargs: dict) -> JAImsMistralKWArgs:
-        return JAImsMistralKWArgs(
+    def from_dict(kwargs: dict) -> MistralParams:
+        """
+        Returns a new MistralParams instance from a dictionary.
+
+        Args:
+            kwargs (dict): The keyword arguments as a dictionary.
+
+        Returns:
+            MistralParams: The MistralParams instance.
+        """
+
+        return MistralParams(
             model=kwargs.get("model", "open-mistral-7b"),
             messages=kwargs.get("messages", []),
             max_tokens=kwargs.get("max_tokens", 1024),
@@ -131,11 +147,26 @@ class JAImsMistralKWArgs:
         stop: Optional[Union[str, List[str]]] = None,
         tool_choice: Optional[Literal["auto", "any", "none"]] = None,
         tools: Optional[List[Dict]] = None,
-    ) -> JAImsMistralKWArgs:
+    ) -> MistralParams:
         """
-        Returns a new JAImsMistralKWArgs instance with the passed kwargs overridden.
+        Returns a new MistralParams instance with the specified overrides. Pass only the arguments you want to override.
+
+        Args:
+            model (Optional[str], optional): The Mistral model to use. Defaults to None.
+            messages (Optional[List[dict]], optional): The list of messages for the chat completion. Defaults to None.
+            max_tokens (Optional[int], optional): The maximum number of tokens in the generated response. Defaults to None.
+            stream (Optional[bool], optional): Whether to use streaming for the API call. Defaults to None.
+            temperature (Optional[float], optional): The temperature for generating creative text. Defaults to None.
+            top_p (Optional[int], optional): The top-p value for nucleus sampling. Defaults to None.
+            response_format (Optional[Dict], optional): The format for the generated response. Defaults to None.
+            stop (Optional[Union[str, List[str]]], optional): The stop condition for the generated response. Defaults to None.
+            tool_choice (Optional[Literal["auto", "any", "none"]], optional): The choice of tool to use. Defaults to None.
+            tools (Optional[List[Dict]], optional): The list of function tool wrappers to use. Defaults to None.
+
+        Returns:
+            MistralParams: The new MistralParams instance.
         """
-        return JAImsMistralKWArgs(
+        return MistralParams(
             model=model if model else self.model,
             messages=messages if messages else self.messages,
             max_tokens=max_tokens if max_tokens else self.max_tokens,
@@ -151,18 +182,7 @@ class JAImsMistralKWArgs:
         )
 
 
-class MistralTransactionStorageInterface(ABC):
-    """
-    Interface for storing LLM transactions.
-    Override this class to implement your own storage, to store a pair of LLM request and response payloads.
-    """
-
-    @abstractmethod
-    def store_transaction(self, request: dict, response: dict):
-        pass
-
-
-class JAImsMistralAdapter(LLMAdapterITF):
+class MistralAdapter(LLMAdapterITF):
     """
     The JAIms Mistral adapter.
     """
@@ -171,20 +191,32 @@ class JAImsMistralAdapter(LLMAdapterITF):
         self,
         api_key: Optional[str] = None,
         options: Optional[Config] = None,
-        kwargs: Optional[Union[JAImsMistralKWArgs, Dict]] = None,
-        kwargs_messages_behavior: Literal["append", "replace"] = "append",
-        kwargs_tools_behavior: Literal["append", "replace"] = "append",
-        transaction_storage: Optional[MistralTransactionStorageInterface] = None,
+        kwargs: Optional[Union[MistralParams, Dict]] = None,
+        existing_params_messages_behaviour: Literal["append", "replace"] = "append",
+        existing_tools_behaviour: Literal["append", "replace"] = "append",
     ):
+        """
+        Initializes the Mistral adapter.
+
+        Args:
+            api_key (Optional[str], optional): The Mistral API key. Defaults to None.
+            options (Optional[Config], optional): The configuration for the exponential backoff operation. Defaults to None.
+            kwargs (Optional[Union[MistralParams, Dict]], optional): The keyword arguments for the adapter. Defaults to None.
+            existing_params_messages_behaviour (Literal["append", "replace"], optional): The behavior for the messages in the kwargs when receiving new messages on calls. Defaults to "append", which appends new messages to the params passed in the constructor.
+            existing_tools_behaviour (Literal["append", "replace"], optional): The behavior for the tools in the kwargs when receiving new tools on calls. Defaults to "append", which appends new tools to the params passed in the constructor.
+
+        Raises:
+            Exception: If the Mistral API key is not provided.
+
+        """
         self.api_key = api_key or os.getenv("MISTRAL_API_KEY")
         if not self.api_key:
             raise Exception("Mistral API key not provided.")
 
         self.options = options or Config()
-        self.kwargs = kwargs or JAImsMistralKWArgs()
-        self.kwargs_messages_behavior = kwargs_messages_behavior
-        self.kwargs_tools_behavior = kwargs_tools_behavior
-        self.transaction_storage = transaction_storage
+        self.kwargs = kwargs or MistralParams()
+        self.existing_params_messages_behaviour = existing_params_messages_behaviour
+        self.existing_tools_behaviour = existing_tools_behaviour
 
     def __get_args(
         self,
@@ -193,13 +225,13 @@ class JAImsMistralAdapter(LLMAdapterITF):
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
-        if isinstance(self.kwargs, JAImsMistralKWArgs):
+        if isinstance(self.kwargs, MistralParams):
             args = self.kwargs.to_dict()
         else:
             args = deepcopy(self.kwargs)
 
         mistral_messages = self.__jaims_messages_to_mistral(messages or [])
-        if self.kwargs_messages_behavior == "append":
+        if self.existing_params_messages_behaviour == "append":
             kwargs_messages = args.get("messages", [])
             mistral_messages = kwargs_messages + mistral_messages
 
@@ -209,7 +241,7 @@ class JAImsMistralAdapter(LLMAdapterITF):
         # handle tools
 
         mistral_tools = self.__jaims_tools_to_mistral(tools or [])
-        if self.kwargs_tools_behavior == "append":
+        if self.existing_tools_behaviour == "append":
             mistral_tools = args.get("tools", []) + mistral_tools
 
         tool_choice = "auto"
@@ -241,11 +273,6 @@ class JAImsMistralAdapter(LLMAdapterITF):
         )
         response = self.___get_mistral_response(args, self.options)
         assert isinstance(response, ChatCompletionResponse)
-        if self.transaction_storage:
-            self.transaction_storage.store_transaction(
-                request=args,
-                response=response.model_dump(exclude_none=True),
-            )
 
         return self.__mistral_chat_completion_to_jaims_message(response)
 
@@ -268,12 +295,6 @@ class JAImsMistralAdapter(LLMAdapterITF):
             )
             yield self.__mistral_chat_completion_choice_delta_to_jaims_message(
                 accumulated_delta, completion_chunk
-            )
-
-        if self.transaction_storage and accumulated_delta:
-            self.transaction_storage.store_transaction(
-                request=args,
-                response=accumulated_delta.model_dump(exclude_none=True),
             )
 
     def __jaims_messages_to_mistral(self, messages: List[Message]) -> List[dict]:
