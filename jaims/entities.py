@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 import json
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar, Union, Generic
 from PIL import Image
 from pydantic import BaseModel
 import functools
@@ -273,8 +273,10 @@ class JAImsStreamingMessage:
 # Tools and function handling classes
 # -----------------------------------
 
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
-class JAImsFunctionToolDescriptor:
+
+class JAImsFunctionToolDescriptor(Generic[ModelT]):
     """
     Models a function tool that an LLM interacts with.
 
@@ -293,7 +295,7 @@ class JAImsFunctionToolDescriptor:
         self,
         name: str,
         description: str,
-        params: Optional[type[BaseModel]],
+        params: Optional[type[ModelT]],
     ):
         self.name = name
         self.description = description
@@ -445,7 +447,7 @@ class JAImsFunctionTool:
 
     def __init__(
         self,
-        descriptor: JAImsFunctionToolDescriptor,
+        descriptor: JAImsFunctionToolDescriptor[ModelT],
         function: Optional[Callable] = None,
         formatter: Optional[Callable[[Dict], Tuple[tuple, dict]]] = None,
     ):
@@ -471,6 +473,7 @@ class JAImsFunctionTool:
         if not self.function:
             return None
 
+        # handle case when wrapped function is an instance method
         if self.__bound_instance:
             return self.function(self.__bound_instance, *args, **kwargs)
 
@@ -507,7 +510,7 @@ class JAImsFunctionTool:
 
         return (parsed_args,), {}
 
-    def call_raw(self, **kwargs) -> Any:
+    def call_raw(self, **kwargs):
         """
         Calls the wrapped function parsing the raw data (received from the LLM) into the expected parameters defined in the descriptor.
 
@@ -531,39 +534,6 @@ class JAImsFunctionTool:
 # -----------------------------------
 # LLM Model Configuration and Options
 # -----------------------------------
-
-
-class JAImsModelCode:
-    """
-    Constants for the most common LLM models.
-    """
-
-    GEMINI_1_PRO = "gemini-1.0-pro"
-    GEMINI_1_PRO_LATEST = "gemini-1.0-pro-latest"
-    GEMINI_1_PRO_001 = "gemini-1.0-pro-001"
-    GEMINI_1_PRO_VISION = "gemini-1.0-pro-vision"
-    GEMINI_1_PRO_VISION_LATEST = "gemini-1.0-pro-vision-latest"
-    GEMINI_1_5_FLASH_LATEST = "gemini-1.5-flash-latest"
-    GEMINI_1_5_PRO = "gemini-1.5-pro"
-    GEMINI_1_5_PRO_LATEST = "gemini-1.5-pro-latest"
-    GPT_3_5_TURBO = "gpt-3.5-turbo"
-    GPT_4 = "gpt-4"
-    GPT_4_32K = "gpt-4-32k"
-    GPT_4_0613 = "gpt-4-0613"
-    GPT_4_32K_0613 = "gpt-4-32k-0613"
-    GPT_4_TURBO = "gpt-4-turbo"
-    GPT_4_TURBO_2024_04_09 = "gpt-4-turbo-2024-04-09"
-    GPT_4_TURBO_PREVIEW = "gpt-4-turbo-preview"
-    GPT_4_0125_PREVIEW = "gpt-4-0125-preview"
-    GPT_4_1106_PREVIEW = "gpt-4-1106-preview"
-    GPT_4_VISION_PREVIEW = "gpt-4-vision-preview"
-    GPT_4_1106_VISION_PREVIEW = "gpt-4-1106-vision-preview"
-    GPT_4o = "gpt-4o"
-    GPT_4o_2024_05_13 = "gpt-4o-2024-05-13"
-    CLAUDE_3_5_SONNET_20240620 = "claude-3-5-sonnet-20240620"
-    CLAUDE_3_OPUS_20240229 = "claude-3-opus-20240229"
-    CLAUDE_3_SONNET_20240229 = "claude-3-sonnet-20240229"
-    CLAUDE_3_HAIKU_20240307 = "claude-3-haiku-20240307"
 
 
 class JAImsLLMConfig:

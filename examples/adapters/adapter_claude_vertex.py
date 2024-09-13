@@ -1,11 +1,14 @@
 from jaims import (
-    JAImsAgent,
     JAImsDefaultHistoryManager,
     JAImsMessage,
-    JAImsLLMConfig,
-    JAImsOptions,
     jaimsfunctiontool,
+    JAImsOptions,
 )
+from jaims.adapters.anthropic_adapter.adapter import (
+    JAImsAnthropicAdapter,
+    JAImsAnthropicKWArgs,
+)
+from jaims.agent import JAImsAgent
 
 
 @jaimsfunctiontool(
@@ -13,56 +16,61 @@ from jaims import (
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def sum(a: int, b: int):
-    print("\n----performing sum----")
+    print("----performing sum----")
     print(a, b)
     print("----------------------")
     return a + b
 
 
 @jaimsfunctiontool(
-    description="use this function when the user wants to subtract two numbers",
+    description="use this function when the user wants to multiply two numbers",
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def multiply(a: int, b: int):
-    print("\n----performing multiplication----")
+    print("----performing multiply----")
     print(a, b)
-    print("----------------------------------")
+    print("----------------------")
     return a * b
 
 
 @jaimsfunctiontool(
-    description="use this function when the user wants to store the result of an operation",
+    description="use this function when the user wants to store the result of a sum",
+    params_descriptions={"result": "the result of a sum"},
 )
-def store_result(result: int):
-    print("\n----storing result----")
+def store_sum(result: int):
+    print("----storing sum----")
+    print(result)
+    print("-------------------")
+
+
+@jaimsfunctiontool(
+    description="use this function when the user wants to store the result of a multiply",
+    params_descriptions={"result": "the result of a multiply"},
+)
+def store_multiply(result: int):
+    print("----storing multiply----")
     print(result)
     print("-------------------")
 
 
 def main():
     stream = True
-    model = "gemini-1.5-pro"
-    provider = "vertex"  # either "openai" or "google"
 
-    agent = JAImsAgent.build(
-        model=model,
-        provider=provider,
+    adapter = JAImsAnthropicAdapter(
+        provider="vertex",
+        kwargs=JAImsAnthropicKWArgs(model="claude-3-5-sonnet@20240620"),
         options=JAImsOptions(
             platform_specific_options={
+                "region": "europe-west1",
                 "project_id": "your-project-id",
-                "location": "europe-west1",
             }
         ),
-        config=JAImsLLMConfig(
-            temperature=0.5,
-            max_tokens=2000,
-        ),
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
         history_manager=JAImsDefaultHistoryManager(),
-        tools=[
-            sum,
-            multiply,
-            store_result,
-        ],
+        tools=[sum, multiply, store_sum, store_multiply],
     )
 
     print("Hello, I am JAIms, your personal assistant.")

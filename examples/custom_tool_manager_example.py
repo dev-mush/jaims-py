@@ -7,95 +7,96 @@ from jaims import (
     JAImsFunctionToolDescriptor,
     JAImsToolManager,
     JAImsDefaultHistoryManager,
+    JAImsToolResponse,
     create_model,
     Field,
 )
 
 from jaims.adapters.openai_adapter import (
-    create_jaims_openai,
     JAImsOpenaiKWArgs,
     JAImsOpenaiAdapter,
 )
 
-from examples._examples_utils import FileTransactionStorage
-
 
 class MyCustomToolManager(JAImsToolManager):
 
-    def __init__(self, agent: JAImsAgent) -> None:
+    def __init__(self) -> None:
+        self.agent = None
+
+    def bind_agent(self, agent: JAImsAgent) -> None:
         self.agent = agent
 
     def handle_tool_calls(
         self,
-        agent: JAImsAgent,
         tool_calls: List[JAImsToolCall],
         tools: List[JAImsFunctionTool],
-    ) -> List[JAImsMessage]:
-        response_messages = []
+    ) -> List[JAImsToolResponse]:
+        tool_responses = []
         for tool_call in tool_calls:
-
             if tool_call.tool_name == "echo":
+                print("echo called")
                 if tool_call.tool_args:
-                    response_messages.append(
-                        JAImsMessage.tool_response_message(
-                            tool_call_id=tool_call.id,
-                            tool_name=tool_call.tool_name,
-                            response=tool_call.tool_args.get("value", ""),
-                        )
-                    )
+                    response_str = tool_call.tool_args.get("value", "")
+                    is_error = False
                 else:
-                    response_messages.append(
-                        JAImsMessage.tool_response_message(
-                            tool_call_id=tool_call.id,
-                            tool_name=tool_call.tool_name,
-                            response="error: Value param not passed",
-                        )
+                    response_str = "error: Value param not passed"
+                    is_error = True
+
+                tool_responses.append(
+                    JAImsToolResponse(
+                        tool_call_id=tool_call.id,
+                        tool_name=tool_call.tool_name,
+                        response=response_str,
+                        is_error=is_error,
                     )
+                )
             elif tool_call.tool_name == "reverse":
+                print("reverse called")
                 if tool_call.tool_args:
                     value = tool_call.tool_args.get("value", "")
-                    result = value[::-1]
-                    response_messages.append(
-                        JAImsMessage.tool_response_message(
-                            tool_call_id=tool_call.id,
-                            tool_name=tool_call.tool_name,
-                            response=result,
-                        )
-                    )
+                    response_str = value[::-1]
+                    is_error = False
                 else:
-                    response_messages.append(
-                        JAImsMessage.tool_response_message(
-                            tool_call_id=tool_call.id,
-                            tool_name=tool_call.tool_name,
-                            response="error: Value param not passed",
-                        )
+                    response_str = "error: Value param not passed"
+                    is_error = True
+
+                tool_responses.append(
+                    JAImsToolResponse(
+                        tool_call_id=tool_call.id,
+                        tool_name=tool_call.tool_name,
+                        response=response_str,
+                        is_error=is_error,
                     )
+                )
             elif tool_call.tool_name == "change_model":
-                openai_adapter = agent.llm_interface
+                if self.agent is None:
+                    raise ValueError("Agent not bound to the tool manager")
+
+                openai_adapter = self.agent.llm_interface
                 assert isinstance(openai_adapter, JAImsOpenaiAdapter)
                 current_kwargs = openai_adapter.kwargs
                 if isinstance(current_kwargs, dict):
                     current_kwargs = JAImsOpenaiKWArgs.from_dict(current_kwargs)
 
                 new_model = (
-                    "gpt-3.5-turbo"
-                    if current_kwargs.model == "gpt-4-turbo"
-                    else "gpt-4-turbo"
+                    "gpt-4o" if current_kwargs.model == "gpt-4-turbo" else "gpt-4-turbo"
                 )
 
                 openai_adapter.kwargs = current_kwargs.copy_with_overrides(
                     model=new_model
                 )
-                agent.llm_interface = openai_adapter
-                response_messages.append(
-                    JAImsMessage.tool_response_message(
+                self.agent.llm_interface = openai_adapter
+                tool_responses.append(
+                    JAImsToolResponse(
                         tool_call_id=tool_call.id,
                         tool_name=tool_call.tool_name,
                         response=f"Model changed to {new_model}",
                     )
                 )
 
-        return response_messages
+                print("Model changed to", new_model)
+
+        return tool_responses
 
 
 def main():
@@ -129,10 +130,12 @@ def main():
         ),
     )
 
-    agent = create_jaims_openai(
-        kwargs=JAImsOpenaiKWArgs(
-            model="gpt-4-turbo",
-        ),
+    tool_manager = MyCustomToolManager()
+
+    agent = JAImsAgent.build(
+        model="gpt-4-turbo",
+        provider="openai",
+        tool_manager=tool_manager,
         history_manager=JAImsDefaultHistoryManager(
             leading_prompts=[
                 JAImsMessage.system_message(
@@ -145,9 +148,9 @@ def main():
             reverse_wrapper,
             change_model_wrapper,
         ],
-        transaction_storage=FileTransactionStorage(),
-        tool_manager=MyCustomToolManager(),
     )
+
+    tool_manager.bind_agent(agent)
 
     print("Hello, I am JAIms, your personal assistant.")
     print("How can I help you today?")

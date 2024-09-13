@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import Literal, Optional, List, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .agent import JAImsAgent
+
+from .agent import JAImsAgent
 
 from jaims.entities import JAImsOptions, JAImsLLMConfig
 from jaims.interfaces import JAImsHistoryManager, JAImsToolManager, JAImsFunctionTool
@@ -17,6 +17,8 @@ def openai_factory(
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
     tool_constraints: Optional[List[str]] = None,
+    kwargs_messages_behavior: Literal["append", "replace"] = "append",
+    kwargs_tools_behavior: Literal["append", "replace"] = "append",
 ) -> JAImsAgent:
     """
     Factory function to create an instance of JAImsAgent using OpenAI as the underlying model.
@@ -35,8 +37,7 @@ def openai_factory(
         JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
 
     """
-    from .adapters.openai_adapter import create_jaims_openai
-    from .adapters.openai_adapter import JAImsOpenaiKWArgs
+    from .adapters.openai_adapter import JAImsOpenaiKWArgs, JAImsOpenaiAdapter
 
     config = config or JAImsLLMConfig()
     options = options or JAImsOptions()
@@ -50,15 +51,23 @@ def openai_factory(
         tool_choice=tool_choice,
     )
 
-    return create_jaims_openai(
+    adapter = JAImsOpenaiAdapter(
         api_key=api_key,
         options=options,
         kwargs=kwargs,
+        kwargs_messages_behavior=kwargs_messages_behavior,
+        kwargs_tools_behavior=kwargs_tools_behavior,
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
         tool_constraints=tool_constraints,
     )
+
+    return agent
 
 
 def google_factory(
@@ -88,10 +97,8 @@ def google_factory(
         JAImsAgent: An instance of JAImsAgent configured for Google models.
     """
 
-    from .adapters.google_generative_ai_adapter.factory import (
-        create_jaims_gemini,
-        generation_types,
-    )
+    from .adapters.google_generative_ai_adapter import JAImsGoogleGenerativeAIAdapter
+    from google.generativeai.types import generation_types
 
     config = config or JAImsLLMConfig()
     options = options or JAImsOptions()
@@ -102,15 +109,21 @@ def google_factory(
         response_schema=config.response_format,
     )
 
-    return create_jaims_gemini(
+    adapter = JAImsGoogleGenerativeAIAdapter(
         api_key=api_key,
         model=model,
         generation_config=generation_config,
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
         tool_constraints=tool_constraints,
     )
+
+    return agent
 
 
 def mistral_factory(
@@ -122,6 +135,8 @@ def mistral_factory(
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
     tool_constraints: Optional[List[str]] = None,
+    kwargs_messages_behavior: Literal["append", "replace"] = "append",
+    kwargs_tools_behavior: Literal["append", "replace"] = "append",
 ) -> JAImsAgent:
     """
     Factory function to create an instance of JAImsAgent using Mistral as the underlying model.
@@ -140,8 +155,7 @@ def mistral_factory(
         JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
 
     """
-    from .adapters.mistral_adapter import create_jaims_mistral
-    from .adapters.mistral_adapter import JAImsMistralKWArgs
+    from .adapters.mistral_adapter import JAImsMistralKWArgs, JAImsMistralAdapter
 
     config = config or JAImsLLMConfig()
     options = options or JAImsOptions()
@@ -155,15 +169,23 @@ def mistral_factory(
         tool_choice=tool_choice,
     )
 
-    return create_jaims_mistral(
+    adapter = JAImsMistralAdapter(
         api_key=api_key,
         options=options,
         kwargs=kwargs,
+        kwargs_messages_behavior=kwargs_messages_behavior,
+        kwargs_tools_behavior=kwargs_tools_behavior,
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
         tool_constraints=tool_constraints,
     )
+
+    return agent
 
 
 def anthropic_factory(
@@ -179,6 +201,8 @@ def anthropic_factory(
     tool_manager: Optional[JAImsToolManager] = None,
     tools: Optional[List[JAImsFunctionTool]] = None,
     tool_constraints: Optional[List[str]] = None,
+    kwargs_messages_behavior: Literal["append", "replace"] = "append",
+    kwargs_tools_behavior: Literal["append", "replace"] = "append",
 ) -> JAImsAgent:
     """
     Factory function to create an instance of JAImsAgent using Anthropic as the underlying model.
@@ -198,8 +222,7 @@ def anthropic_factory(
         JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
 
     """
-    from .adapters.anthropic_adapter import create_jaims_anthropic
-    from .adapters.anthropic_adapter import JAImsAnthropicKWArgs
+    from .adapters.anthropic_adapter import JAImsAnthropicKWArgs, JAImsAnthropicAdapter
 
     config = config or JAImsLLMConfig()
     options = options or JAImsOptions()
@@ -210,16 +233,24 @@ def anthropic_factory(
         max_tokens=config.max_tokens,
     )
 
-    return create_jaims_anthropic(
+    adapter = JAImsAnthropicAdapter(
         api_key=api_key,
-        options=options,
         provider=provider,
+        options=options,
         kwargs=kwargs,
+        kwargs_messages_behavior=kwargs_messages_behavior,
+        kwargs_tools_behavior=kwargs_tools_behavior,
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
         tool_constraints=tool_constraints,
     )
+
+    return agent
 
 
 def vertex_ai_factory(
@@ -249,10 +280,8 @@ def vertex_ai_factory(
         JAImsAgent: An instance of JAImsAgent configured for Google models.
     """
 
-    from .adapters.vertexai_adapter.factory import (
-        create_jaims_vertex,
-        GenerationConfig,
-    )
+    from .adapters.vertexai_adapter import JAImsVertexAIAdapter
+    from vertexai.generative_models import GenerationConfig
 
     if not options:
         raise ValueError("pass project_id and location in options")
@@ -274,13 +303,20 @@ def vertex_ai_factory(
         response_schema=config.response_format,
     )
 
-    return create_jaims_vertex(
-        model_name=model,
+    adapter = JAImsVertexAIAdapter(
         project_id=project_id,
         location=location,
+        model_name=model,
         generation_config=generation_config,
+        options=options,
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
         tool_constraints=tool_constraints,
     )
+
+    return agent

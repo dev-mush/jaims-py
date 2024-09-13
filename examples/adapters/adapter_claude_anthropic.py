@@ -1,12 +1,14 @@
 from jaims import (
-    JAImsMessage,
     JAImsDefaultHistoryManager,
+    JAImsMessage,
     jaimsfunctiontool,
 )
 
-from jaims.adapters.google_generative_ai_adapter import (
-    create_jaims_gemini,
+from jaims.adapters.anthropic_adapter import (
+    JAImsAnthropicAdapter,
+    JAImsAnthropicKWArgs,
 )
+from jaims.agent import JAImsAgent
 
 
 @jaimsfunctiontool(
@@ -54,17 +56,13 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    history_manager = JAImsDefaultHistoryManager(
-        leading_prompts=[
-            JAImsMessage.system_message(
-                "You are JAIms, a helpful assistant that helps the user with math operations."
-            )
-        ],
+    adapter = JAImsAnthropicAdapter(
+        kwargs=JAImsAnthropicKWArgs(model="claude-3-5-sonnet-20240620"),
     )
 
-    agent = create_jaims_gemini(
-        model="gemini-1.5-pro",
-        history_manager=history_manager,
+    agent = JAImsAgent(
+        llm_interface=adapter,
+        history_manager=JAImsDefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )
 

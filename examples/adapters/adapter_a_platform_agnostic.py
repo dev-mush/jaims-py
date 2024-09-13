@@ -1,11 +1,10 @@
 from jaims import (
-    JAImsMessage,
+    JAImsAgent,
     JAImsDefaultHistoryManager,
+    JAImsMessage,
+    JAImsLLMConfig,
+    JAImsOptions,
     jaimsfunctiontool,
-)
-
-from jaims.adapters.vertexai_adapter import (
-    create_jaims_vertex,
 )
 
 
@@ -14,60 +13,56 @@ from jaims.adapters.vertexai_adapter import (
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def sum(a: int, b: int):
-    print("----performing sum----")
+    print("\n----performing sum----")
     print(a, b)
     print("----------------------")
     return a + b
 
 
 @jaimsfunctiontool(
-    description="use this function when the user wants to multiply two numbers",
+    description="use this function when the user wants to subtract two numbers",
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def multiply(a: int, b: int):
-    print("----performing multiply----")
+    print("\n----performing multiplication----")
     print(a, b)
-    print("----------------------")
+    print("----------------------------------")
     return a * b
 
 
 @jaimsfunctiontool(
-    description="use this function when the user wants to store the result of a sum",
-    params_descriptions={"result": "the result of a sum"},
+    description="use this function when the user wants to store the result of an operation",
 )
-def store_sum(result: int):
-    print("----storing sum----")
-    print(result)
-    print("-------------------")
-
-
-@jaimsfunctiontool(
-    description="use this function when the user wants to store the result of a multiply",
-    params_descriptions={"result": "the result of a multiply"},
-)
-def store_multiply(result: int):
-    print("----storing multiply----")
+def store_result(result: int):
+    print("\n----storing result----")
     print(result)
     print("-------------------")
 
 
 def main():
     stream = True
+    model = "gemini-1.5-pro"
+    provider = "vertex"
 
-    history_manager = JAImsDefaultHistoryManager(
-        leading_prompts=[
-            JAImsMessage.system_message(
-                "You are JAIms, a helpful assistant that helps the user with math operations."
-            )
+    agent = JAImsAgent.build(
+        model=model,
+        provider=provider,
+        options=JAImsOptions(
+            platform_specific_options={
+                "project_id": "your-project-id",
+                "location": "europe-west1",
+            }
+        ),
+        config=JAImsLLMConfig(
+            temperature=0.5,
+            max_tokens=2000,
+        ),
+        history_manager=JAImsDefaultHistoryManager(),
+        tools=[
+            sum,
+            multiply,
+            store_result,
         ],
-    )
-
-    agent = create_jaims_vertex(
-        model_name="gemini-1.5-pro",
-        project_id="your-project-id",
-        location="europe-west1",
-        history_manager=history_manager,
-        tools=[sum, multiply, store_sum, store_multiply],
     )
 
     print("Hello, I am JAIms, your personal assistant.")

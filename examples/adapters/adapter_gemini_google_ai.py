@@ -1,18 +1,11 @@
-import json
-import os
-import time
 from jaims import (
-    JAImsDefaultHistoryManager,
     JAImsMessage,
+    JAImsDefaultHistoryManager,
     jaimsfunctiontool,
 )
 
-
-from jaims.adapters.mistral_adapter import (
-    JAImsMistralKWArgs,
-    create_jaims_mistral,
-    MistralTransactionStorageInterface,
-)
+from jaims.adapters.google_generative_ai_adapter import JAImsGoogleGenerativeAIAdapter
+from jaims.agent import JAImsAgent
 
 
 @jaimsfunctiontool(
@@ -57,39 +50,16 @@ def store_multiply(result: int):
     print("-------------------")
 
 
-class FileTransactionStorage(MistralTransactionStorageInterface):
-    def __init__(self, path="storage") -> None:
-        super().__init__()
-        script_dir = os.path.dirname(__file__)
-        self.storage_path = os.path.join(script_dir, path)
-        if not os.path.exists(self.storage_path):
-            os.makedirs(self.storage_path)
-
-    def store_transaction(self, request: dict, response: dict):
-        transaction = {"request": request, "response": response}
-        unix_timestamp = str(int(time.time()))
-
-        with open(f"{self.storage_path}/{unix_timestamp}.json", "w") as f:
-            f.write(json.dumps(transaction, indent=4))
-
-
 def main():
     stream = True
 
-    agent = create_jaims_mistral(
-        kwargs=JAImsMistralKWArgs(
-            model="mistral-large-latest",
-            stream=stream,
-        ),
-        transaction_storage=FileTransactionStorage(),
-        history_manager=JAImsDefaultHistoryManager(
-            history=[
-                JAImsMessage.assistant_message(
-                    text="Hello, I am JAIms, your personal assistant."
-                ),
-                JAImsMessage.assistant_message(text="How can I help you today?"),
-            ]
-        ),
+    adapter = JAImsGoogleGenerativeAIAdapter(
+        model="gemini-1.5-pro",
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
+        history_manager=JAImsDefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )
 

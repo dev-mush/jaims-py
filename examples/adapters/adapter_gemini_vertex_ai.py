@@ -1,17 +1,11 @@
-import json
-import os
-import time
 from jaims import (
-    JAImsDefaultHistoryManager,
+    JAImsAgent,
     JAImsMessage,
+    JAImsDefaultHistoryManager,
     jaimsfunctiontool,
 )
 
-from jaims.adapters.anthropic_adapter import (
-    create_jaims_anthropic,
-    JAImsAnthropicAdapter,
-    JAImsAnthropicKWArgs,
-)
+from jaims.adapters.vertexai_adapter import JAImsVertexAIAdapter
 
 
 @jaimsfunctiontool(
@@ -59,8 +53,14 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    agent = create_jaims_anthropic(
-        provider="anthropic",
+    adapter = JAImsVertexAIAdapter(
+        model_name="gemini-1.5-pro",
+        project_id="your-project-id",
+        location="europe-west1",
+    )
+
+    agent = JAImsAgent(
+        llm_interface=adapter,
         history_manager=JAImsDefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )

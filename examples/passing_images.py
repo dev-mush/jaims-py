@@ -1,5 +1,5 @@
 import os
-from jaims import JAImsImageContent, JAImsMessage, JAImsModelCode
+from jaims import JAImsImageContent, JAImsMessage
 
 from jaims.adapters.openai_adapter import (
     JAImsOpenaiKWArgs,
@@ -31,19 +31,8 @@ def main():
     )
 
     gemini_agent = create_jaims_gemini(
-        model=JAImsModelCode.GEMINI_1_PRO_VISION_LATEST,
+        model="gemini-1.5-flash",
     )
-
-    messages = [
-        JAImsMessage(
-            role=JAImsMessageRole.USER,
-            contents=[
-                "Are these images the same? What do they contain?",
-                JAImsImageContent(pil_image),
-                JAImsImageContent(image_url),
-            ],
-        )
-    ]
 
     openai_response = openai_agent.message(
         [
@@ -58,8 +47,8 @@ def main():
         ]
     )
 
-    # print("OpenAI Response:")
-    # print(openai_response)
+    print("OpenAI Response:")
+    print(openai_response)
 
     gemini_response = gemini_agent.message(
         [

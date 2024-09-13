@@ -21,6 +21,7 @@ from jaims.entities import (
     JAImsFunctionTool,
     JAImsLLMConfig,
     JAImsOptions,
+    ModelT,
 )
 
 supported_providers_list = [
@@ -430,9 +431,9 @@ class JAImsAgent:
 
     def run_tool(
         self,
-        descriptor: JAImsFunctionToolDescriptor,
+        descriptor: JAImsFunctionToolDescriptor[ModelT],
         messages: Optional[List[JAImsMessage]] = None,
-    ) -> Any:
+    ) -> ModelT:
         """
         Runs a single tool with the given messages and returns the expected response data.
 
@@ -466,13 +467,13 @@ class JAImsAgent:
     def run_tool_model(
         model: str,
         provider: SUPPORTED_PROVIDERS,
-        descriptor: JAImsFunctionToolDescriptor,
+        descriptor: JAImsFunctionToolDescriptor[ModelT],
         messages: Optional[List[JAImsMessage]] = None,
         api_key: Optional[str] = None,
         options: Optional[JAImsOptions] = None,
         config: Optional[JAImsLLMConfig] = None,
         tool_manager: Optional[JAImsToolManager] = None,
-    ) -> Any:
+    ) -> ModelT:
         """
         Runs a single tool with the given messages and returns the expected response data.
 

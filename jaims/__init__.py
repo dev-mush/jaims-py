@@ -20,9 +20,9 @@ from .entities import (
     JAImsOptions,
     JAImsImageContentType,
     JAImsMaxRetriesExceeded,
-    JAImsModelCode,
     JAImsStreamingMessage,
     JAImsUnexpectedFunctionCall,
+    ModelT,
 )
 
 from .function_tool_decorator import jaimsfunctiontool
@@ -49,13 +49,13 @@ __all__ = [
     "JAImsOptions",
     "JAImsImageContentType",
     "JAImsMaxRetriesExceeded",
-    "JAImsModelCode",
     "JAImsStreamingMessage",
     "JAImsUnexpectedFunctionCall",
     "JAImsToolManager",
     "JAImsHistoryManager",
     "JAImsLLMInterface",
     "jaimsfunctiontool",
+    "ModelT",
     "BaseModel",
     "Field",
     "create_model",

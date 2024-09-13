@@ -47,7 +47,7 @@ class JAImsOpenaiKWArgs:
     (https://platform.openai.com/docs/api-reference/chat/create).
 
     Args:
-        model (str, optional): The OpenAI model to use. Defaults to gpt-3.5-turbo.
+        model (str, optional): The OpenAI model to use. Defaults to gpt-4o.
         messages (List[dict], optional): The list of messages for the chat completion. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them. If passed, they will always be appended to the messages passed in the run method.
         max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 500.
         stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
@@ -66,7 +66,7 @@ class JAImsOpenaiKWArgs:
 
     def __init__(
         self,
-        model: str = "gpt-3.5-turbo",
+        model: str = "gpt-4o",
         messages: List[dict] = [],
         max_tokens: int = 1024,
         stream: bool = False,
@@ -79,7 +79,7 @@ class JAImsOpenaiKWArgs:
         logit_bias: Optional[Dict[str, float]] = None,
         response_format: Optional[Dict] = None,
         stop: Union[Optional[str], Optional[List[str]]] = None,
-        tool_choice: Union[str, Dict] = "auto",
+        tool_choice: Optional[Union[str, Dict]] = None,
         tools: Optional[List[Dict]] = None,
     ):
         self.model = model
@@ -124,7 +124,7 @@ class JAImsOpenaiKWArgs:
     @staticmethod
     def from_dict(kwargs: dict) -> JAImsOpenaiKWArgs:
         return JAImsOpenaiKWArgs(
-            model=kwargs.get("model", "gpt-3.5-turbo"),
+            model=kwargs.get("model", "gpt-4o"),
             messages=kwargs.get("messages", []),
             max_tokens=kwargs.get("max_tokens", 1024),
             stream=kwargs.get("stream", False),
@@ -137,7 +137,7 @@ class JAImsOpenaiKWArgs:
             logit_bias=kwargs.get("logit_bias", None),
             response_format=kwargs.get("response_format", None),
             stop=kwargs.get("stop", None),
-            tool_choice=kwargs.get("tool_choice", "auto"),
+            tool_choice=kwargs.get("tool_choice", None),
             tools=kwargs.get("tools", None),
         )
 
@@ -333,21 +333,21 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         # handle tools
 
         openai_tools = self.__jaims_tools_to_openai(tools or [])
-        if self.kwargs_tools_behavior == "append":
-            openai_tools = args.get("tools", []) + openai_tools
-
-        tool_choice = "auto"
-        if tool_constraints:
-            tool_choice = {
-                "type": "function",
-                "function": {
-                    "name": tool_constraints[0],
-                },
-            }
-        elif args.get("tool_choice", None):
-            tool_choice = args["tool_choice"]
-
         if len(openai_tools) > 0:
+            if self.kwargs_tools_behavior == "append":
+                openai_tools = args.get("tools", []) + openai_tools
+
+            tool_choice = "auto"
+            if tool_constraints:
+                tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": tool_constraints[0],
+                    },
+                }
+            elif args.get("tool_choice", None):
+                tool_choice = args["tool_choice"]
+
             args["tools"] = openai_tools
             args["tool_choice"] = tool_choice
 

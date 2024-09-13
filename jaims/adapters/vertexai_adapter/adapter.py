@@ -274,9 +274,11 @@ class JAImsVertexAIAdapter(JAImsLLMInterface):
                 system_instruction=system_instruction or None,  # type: ignore
             )
 
+            # have to type ignore because I can't understand why they've defined the stream
+            # parameter as Literal instead of bool... and this makes the type checker unhappy
             return multimodal_model.generate_content(
                 contents=gemini_messages,
-                stream=stream,
+                stream=stream,  # type: ignore
             )
 
         return call_with_exponential_backoff(
