@@ -1,16 +1,11 @@
 from .adapter import (
-    JAImsOpenaiKWArgs,
-    JAImsTokenHistoryOptimizer,
-    OpenAITransactionStorageInterface,
-    JAImsOpenaiAdapter,
+    OpenAIParams,
+    OpenAITokenHistoryOptimizer,
+    OpenaiAdapter,
 )
 
-from .factory import create_jaims_openai
-
 __all__ = [
-    "JAImsOpenaiKWArgs",
-    "create_jaims_openai",
-    "JAImsTokenHistoryOptimizer",
-    "OpenAITransactionStorageInterface",
-    "JAImsOpenaiAdapter",
+    "OpenAIParams",
+    "OpenAITokenHistoryOptimizer",
+    "OpenaiAdapter",
 ]

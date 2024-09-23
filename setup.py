@@ -15,9 +15,19 @@ with open("requirements-googleai.txt") as f:
 with open("requirements-mistral.txt") as f:
     requirements_mistral = f.read().splitlines()
 
+with open("requirements-anthropic.txt") as f:
+    requirements_anthropic = f.read().splitlines()
+
+with open("requirements-anthropic-vertex.txt") as f:
+    requirements_anthropic_vertex = f.read().splitlines()
+
+with open("requirements-vertexai.txt") as f:
+    requirements_vertexai = f.read().splitlines()
+
+
 setup(
     name="jaims-py",
-    version="2.0.0-beta.14",
+    version="2.0.0",
     packages=find_packages(),
     description="A Python package for creating LLM powered, agentic, platform agnostic software.",
     long_description=open("README.md").read(),
@@ -30,6 +40,16 @@ setup(
     extras_require={
         "openai": requirements_openai,
         "google": requirements_google_ai,
+        "vertexai": requirements_vertexai,
         "mistral": requirements_mistral,
+        "anthropic": requirements_anthropic,
+        "anthropic-vertex": requirements_anthropic_vertex,
+        "anthropic-all": requirements_anthropic + requirements_anthropic_vertex,
+        "all": requirements_openai
+        + requirements_google_ai
+        + requirements_vertexai
+        + requirements_mistral
+        + requirements_anthropic
+        + requirements_anthropic_vertex,
     },
 )

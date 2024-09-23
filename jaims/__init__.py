@@ -1,61 +1,79 @@
-from .agent import JAImsAgent
+from .agent import Agent, JAImsAgent
 
-from .default_tool_manager import JAImsDefaultToolManager
+from .default_tool_manager import DefaultToolManager
 
 from .default_history_manager import (
-    JAImsDefaultHistoryManager,
-    JAImsLastNHistoryOptimizer,
+    DefaultHistoryManager,
+    LastNHistoryOptimizer,
 )
 from .entities import (
+    Message,
     JAImsMessage,
-    JAImsImageContent,
-    JAImsContentType,
-    JAImsMessageRole,
+    StreamingMessage,
+    ImageContent,
+    ContentType,
+    MessageRole,
+    ToolResponse,
     JAImsToolResponse,
+    FunctionTool,
     JAImsFunctionTool,
-    JAImsMaxConsecutiveFunctionCallsExceeded,
+    FunctionToolDescriptor,
     JAImsFunctionToolDescriptor,
+    ToolCall,
     JAImsToolCall,
+    ModelT,
+    LLMParams,
     JAImsLLMConfig,
+    Config,
     JAImsOptions,
-    JAImsImageContentType,
-    JAImsMaxRetriesExceeded,
-    JAImsModelCode,
-    JAImsStreamingMessage,
-    JAImsUnexpectedFunctionCall,
+    ImageContentType,
+    MaxRetriesExceeded,
+    UnexpectedFunctionCall,
+    MaxConsecutiveFunctionCallsExceeded,
 )
 
 from .function_tool_decorator import jaimsfunctiontool
 
-from .interfaces import JAImsToolManager, JAImsHistoryManager, JAImsLLMInterface
+from .interfaces import (
+    ToolManagerITF,
+    HistoryManagerITF,
+    HistoryOptimizerITF,
+    LLMAdapterITF,
+)
 
 from pydantic import BaseModel, Field, create_model
 
+
 __all__ = [
-    "JAImsAgent",
-    "JAImsDefaultToolManager",
-    "JAImsDefaultHistoryManager",
-    "JAImsLastNHistoryOptimizer",
+    "Agent",
+    "DefaultToolManager",
+    "DefaultHistoryManager",
+    "LastNHistoryOptimizer",
+    "Message",
     "JAImsMessage",
-    "JAImsImageContent",
-    "JAImsContentType",
-    "JAImsMessageRole",
-    "JAImsToolResponse",
+    "ImageContent",
+    "ContentType",
+    "MessageRole",
+    "ToolResponse",
+    "FunctionTool",
     "JAImsFunctionTool",
-    "JAImsMaxConsecutiveFunctionCallsExceeded",
     "JAImsFunctionToolDescriptor",
-    "JAImsToolCall",
+    "MaxConsecutiveFunctionCallsExceeded",
+    "FunctionToolDescriptor",
+    "ToolCall",
+    "LLMParams",
     "JAImsLLMConfig",
-    "JAImsOptions",
-    "JAImsImageContentType",
-    "JAImsMaxRetriesExceeded",
-    "JAImsModelCode",
-    "JAImsStreamingMessage",
-    "JAImsUnexpectedFunctionCall",
-    "JAImsToolManager",
-    "JAImsHistoryManager",
-    "JAImsLLMInterface",
+    "Config",
+    "ImageContentType",
+    "MaxRetriesExceeded",
+    "StreamingMessage",
+    "UnexpectedFunctionCall",
+    "ToolManagerITF",
+    "HistoryManagerITF",
+    "HistoryOptimizerITF",
+    "LLMAdapterITF",
     "jaimsfunctiontool",
+    "ModelT",
     "BaseModel",
     "Field",
     "create_model",

@@ -2,9 +2,9 @@ import unittest
 from jaims.adapters.shared.exponential_backoff_operation import (
     call_with_exponential_backoff,
     ErrorHandlingMethod,
-    JAImsOptions,
+    Config,
 )
-from jaims import JAImsMaxRetriesExceeded
+from jaims import MaxRetriesExceeded
 import time
 
 
@@ -19,7 +19,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
             return ErrorHandlingMethod.FAIL
 
         # Define the options
-        options = JAImsOptions(
+        options = Config(
             max_retries=3,
             retry_delay=1,
             exponential_delay=2,
@@ -46,7 +46,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
             return ErrorHandlingMethod.RETRY
 
         # Define the options
-        options = JAImsOptions(
+        options = Config(
             max_retries=3,
             retry_delay=1,
             exponential_delay=2,
@@ -70,7 +70,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
             return ErrorHandlingMethod.RETRY
 
         # Define the options
-        options = JAImsOptions(
+        options = Config(
             max_retries=3,
             retry_delay=1,
             exponential_delay=2,
@@ -80,7 +80,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
         )
 
         # Call the function under test
-        with self.assertRaises(JAImsMaxRetriesExceeded):
+        with self.assertRaises(MaxRetriesExceeded):
             call_with_exponential_backoff(operation, error_handler, options)
 
         self.assertEqual(count, 4)
@@ -101,7 +101,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
             return ErrorHandlingMethod.EXPONENTIAL_BACKOFF
 
         # Define the options
-        options = JAImsOptions(
+        options = Config(
             max_retries=3,
             retry_delay=1,
             exponential_delay=2,
@@ -131,7 +131,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
             return ErrorHandlingMethod.EXPONENTIAL_BACKOFF
 
         # Define the options
-        options = JAImsOptions(
+        options = Config(
             max_retries=2,
             retry_delay=1,
             exponential_delay=1,
@@ -141,7 +141,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
         )
 
         # Call the function under test
-        with self.assertRaises(JAImsMaxRetriesExceeded):
+        with self.assertRaises(MaxRetriesExceeded):
             call_with_exponential_backoff(operation, error_handler, options)
 
         self.assertEqual(count, 3)
@@ -162,7 +162,7 @@ class TestExponentialBackoffOperation(unittest.TestCase):
 
         # Define the options
 
-        options = JAImsOptions(
+        options = Config(
             max_retries=3,
             retry_delay=1,
             exponential_delay=2,

@@ -1,12 +1,14 @@
 from jaims import (
-    JAImsMessage,
-    JAImsDefaultHistoryManager,
+    DefaultHistoryManager,
+    Message,
     jaimsfunctiontool,
+    Config,
 )
-
-from jaims.adapters.google_generative_ai_adapter import (
-    create_jaims_gemini,
+from jaims.adapters.anthropic_adapter.adapter import (
+    AnthropicAdapter,
+    AnthropicParams,
 )
+from jaims.agent import Agent
 
 
 @jaimsfunctiontool(
@@ -54,17 +56,20 @@ def store_multiply(result: int):
 def main():
     stream = True
 
-    history_manager = JAImsDefaultHistoryManager(
-        leading_prompts=[
-            JAImsMessage.system_message(
-                "You are JAIms, a helpful assistant that helps the user with math operations."
-            )
-        ],
+    adapter = AnthropicAdapter(
+        provider="vertex",
+        params=AnthropicParams(model="claude-3-5-sonnet@20240620"),
+        config=Config(
+            platform_specific_options={
+                "region": "europe-west1",
+                "project_id": "your-project-id",
+            }
+        ),
     )
 
-    agent = create_jaims_gemini(
-        model="gemini-1.5-pro",
-        history_manager=history_manager,
+    agent = Agent(
+        llm_interface=adapter,
+        history_manager=DefaultHistoryManager(),
         tools=[sum, multiply, store_sum, store_multiply],
     )
 
@@ -77,14 +82,14 @@ def main():
 
         if stream:
             response = agent.message_stream(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
             response = agent.message(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             print(response)
 

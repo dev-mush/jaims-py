@@ -1,5 +1,8 @@
 from .adapter import (
-    JAImsGoogleGenerativeAIAdapter,
+    GoogleGenerativeAIAdapter,
 )
 
-from .factory import create_jaims_gemini
+
+__all__ = [
+    "GoogleGenerativeAIAdapter",
+]

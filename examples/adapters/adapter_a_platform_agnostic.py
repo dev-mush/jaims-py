@@ -1,8 +1,9 @@
 from jaims import (
-    JAImsAgent,
-    JAImsDefaultHistoryManager,
-    JAImsMessage,
-    JAImsLLMConfig,
+    Agent,
+    DefaultHistoryManager,
+    Message,
+    LLMParams,
+    Config,
     jaimsfunctiontool,
 )
 
@@ -12,7 +13,7 @@ from jaims import (
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def sum(a: int, b: int):
-    print("----performing sum----")
+    print("\n----performing sum----")
     print(a, b)
     print("----------------------")
     return a + b
@@ -23,47 +24,44 @@ def sum(a: int, b: int):
     params_descriptions={"a": "the first operand", "b": "the second operand"},
 )
 def multiply(a: int, b: int):
-    print("----performing multiplication----")
+    print("\n----performing multiplication----")
     print(a, b)
     print("----------------------------------")
     return a * b
 
 
 @jaimsfunctiontool(
-    description="use this function when the user wants to multiply two numbers"
+    description="use this function when the user wants to store the result of an operation",
 )
-def store_sum(result: int):
-    print("----storing sum----")
+def store_result(result: int):
+    print("\n----storing result----")
     print(result)
     print("-------------------")
 
 
 def main():
     stream = True
-    model = "gpt-4o"  # use JAImsModelCode.GPT_4o to avoid typing / remembering the model name
-    # model = "gemini-1.5-pro-latest"
-    provider = "openai"  # either "openai" or "google"
-    # provider = "google"
+    model = "claude-3-5-sonnet@20240620"
+    provider = "vertex"
 
-    agent = JAImsAgent.build(
+    agent = Agent.build(
         model=model,
         provider=provider,
-        config=JAImsLLMConfig(
+        config=Config(
+            platform_specific_options={
+                "project_id": "your-project-id",
+                "location": "europe-west1",
+            }
+        ),
+        llm_params=LLMParams(
             temperature=0.5,
             max_tokens=2000,
         ),
-        history_manager=JAImsDefaultHistoryManager(
-            history=[
-                JAImsMessage.assistant_message(
-                    text="Hello, I am JAIms, your personal assistant."
-                ),
-                JAImsMessage.assistant_message(text="How can I help you today?"),
-            ]
-        ),
+        history_manager=DefaultHistoryManager(),
         tools=[
             sum,
             multiply,
-            store_sum,
+            store_result,
         ],
     )
 
@@ -76,14 +74,14 @@ def main():
 
         if stream:
             response = agent.message_stream(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             for chunk in response:
                 print(chunk, end="", flush=True)
             print("\n")
         else:
             response = agent.message(
-                [JAImsMessage.user_message(text=user_input)],
+                [Message.user_message(text=user_input)],
             )
             print(response)
 

@@ -1,157 +1,309 @@
 from __future__ import annotations
-from typing import Optional, List, TYPE_CHECKING
+from typing import Literal, Optional, List, TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from .agent import JAImsAgent
 
-from jaims.entities import JAImsOptions, JAImsLLMConfig
-from jaims.interfaces import JAImsHistoryManager, JAImsToolManager, JAImsFunctionTool
+from .agent import Agent
+
+from jaims.entities import Config, LLMParams
+from jaims.interfaces import HistoryManagerITF, ToolManagerITF, FunctionTool
 
 
 def openai_factory(
     model: str,
     api_key: Optional[str] = None,
-    options: Optional[JAImsOptions] = None,
-    config: Optional[JAImsLLMConfig] = None,
-    history_manager: Optional[JAImsHistoryManager] = None,
-    tool_manager: Optional[JAImsToolManager] = None,
-    tools: Optional[List[JAImsFunctionTool]] = None,
-) -> JAImsAgent:
+    config: Optional[Config] = None,
+    llm_params: Optional[LLMParams] = None,
+    history_manager: Optional[HistoryManagerITF] = None,
+    tool_manager: Optional[ToolManagerITF] = None,
+    tools: Optional[List[FunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
+) -> Agent:
     """
-    Factory function to create an instance of JAImsAgent using OpenAI as the underlying model.
+    Factory function to create an instance of JAIms Agent using OpenAI as the underlying model provider.
 
     Args:
         model (str): The name or identifier of the OpenAI model to use.
         api_key (Optional[str]): The API key for accessing the OpenAI service. Defaults to None.
-        options (Optional[JAImsOptions]): Additional options for configuring the JAImsAgent. Defaults to None.
-        config (Optional[JAImsLLMConfig]): Configuration options specific to the OpenAI language model. Defaults to None.
-        history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
-        tool_manager (Optional[JAImsToolManager]): The tool manager to use for managing JAImsFunctionTools. Defaults to None.
-        tools (Optional[List[JAImsFunctionTool]]): The list of JAImsFunctionTools to use. Defaults to None.
+        config (Optional[Config]): Additional options for configuring the JAImsAgent. Defaults to None.
+        llm_params (Optional[LLMParams]): Parameters for the language model. Defaults to None.
+        history_manager (Optional[HistoryManager]): The history manager to use for managing conversation history. Defaults to None.
+        tool_manager (Optional[ToolManager]): The tool manager to use for managing Function Calls. Defaults to None.
+        tools (Optional[List[FunctionTool]]): The list of Function Tools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): The list of tool constraints to use. Defaults to None.
 
     Returns:
-        JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
+        Agent: An instance of JAIms Agent configured with the OpenAI model.
 
     """
-    from .adapters.openai_adapter import create_jaims_openai
-    from .adapters.openai_adapter import JAImsOpenaiKWArgs
+    from .adapters.openai_adapter import OpenAIParams, OpenaiAdapter
 
-    config = config or JAImsLLMConfig()
-    options = options or JAImsOptions()
+    llm_params = llm_params or LLMParams()
+    config = config or Config()
     tool_choice = None
 
-    kwargs = JAImsOpenaiKWArgs().copy_with_overrides(
+    kwargs = OpenAIParams().copy_with_overrides(
         model=model,
-        temperature=config.temperature,
-        max_tokens=config.max_tokens,
-        response_format=config.response_format,
+        temperature=llm_params.temperature,
+        max_tokens=llm_params.max_tokens,
+        response_format=llm_params.response_format,
         tool_choice=tool_choice,
     )
 
-    return create_jaims_openai(
+    adapter = OpenaiAdapter(
         api_key=api_key,
-        options=options,
+        options=config,
         kwargs=kwargs,
+    )
+
+    agent = Agent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
+
+    return agent
 
 
 def google_factory(
     model: str,
     api_key: Optional[str] = None,
-    options: Optional[JAImsOptions] = None,
-    config: Optional[JAImsLLMConfig] = None,
-    history_manager: Optional[JAImsHistoryManager] = None,
-    tool_manager: Optional[JAImsToolManager] = None,
-    tools: Optional[List[JAImsFunctionTool]] = None,
-) -> JAImsAgent:
+    config: Optional[Config] = None,
+    llm_params: Optional[LLMParams] = None,
+    history_manager: Optional[HistoryManagerITF] = None,
+    tool_manager: Optional[ToolManagerITF] = None,
+    tools: Optional[List[FunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
+) -> Agent:
     """
-    Factory function to create an instance of JAImsAgent using Google Gemini as the underlying model.
+    Factory function to create an instance of JAImsAgent using Google Generative AI as the underlying model.
 
     Args:
-        model (str): The name or ID of the Google model to use.
-        api_key (Optional[str]): The API key for accessing the Google model (default: None).
-        options (Optional[JAImsOptions]): Additional options for the JAImsAgent (default: None).
-        config (Optional[JAImsLLMConfig]): Configuration for the JAImsLLM model (default: None).
-        history_manager (Optional[JAImsHistoryManager]): History manager for the JAImsAgent (default: None).
-        tool_manager (Optional[JAImsToolManager]): Tool manager for the JAImsAgent (default: None).
-        tools (Optional[List[JAImsFunctionTool]]): List of function tools for the JAImsAgent (default: None).
+        model (str): The name or identifier of the Google model to use.
+        api_key (Optional[str]): The API key for accessing the Google model. Defaults to None.
+        config (Optional[Config]): Additional options for configuring the JAImsAgent. Defaults to None.
+        llm_params (Optional[LLMParams]): Parameters for the language model. Defaults to None.
+        history_manager (Optional[HistoryManagerITF]): The history manager to use for managing conversation history. Defaults to None.
+        tool_manager (Optional[ToolManagerITF]): The tool manager to use for managing Function Calls. Defaults to None.
+        tools (Optional[List[FunctionTool]]): The list of Function Tools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): The list of tool constraints to use. Defaults to None.
 
     Returns:
-        JAImsAgent: An instance of JAImsAgent configured for Google models.
+        Agent: An instance of JAIms Agent configured with the Google model.
     """
 
-    from .adapters.google_generative_ai_adapter.factory import (
-        create_jaims_gemini,
-        generation_types,
-    )
+    from .adapters.google_generative_ai_adapter import GoogleGenerativeAIAdapter
+    from google.generativeai.types import generation_types
 
-    config = config or JAImsLLMConfig()
-    options = options or JAImsOptions()
+    llm_params = llm_params or LLMParams()
+    config = config or Config()
 
     generation_config = generation_types.GenerationConfig(
-        temperature=config.temperature,
-        max_output_tokens=config.max_tokens,
-        response_schema=config.response_format,
+        temperature=llm_params.temperature,
+        max_output_tokens=llm_params.max_tokens,
+        response_schema=llm_params.response_format,
     )
 
-    return create_jaims_gemini(
+    adapter = GoogleGenerativeAIAdapter(
         api_key=api_key,
         model=model,
         generation_config=generation_config,
+    )
+
+    agent = Agent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
+
+    return agent
 
 
 def mistral_factory(
     model: str,
     api_key: Optional[str] = None,
-    options: Optional[JAImsOptions] = None,
-    config: Optional[JAImsLLMConfig] = None,
-    history_manager: Optional[JAImsHistoryManager] = None,
-    tool_manager: Optional[JAImsToolManager] = None,
-    tools: Optional[List[JAImsFunctionTool]] = None,
-) -> JAImsAgent:
+    config: Optional[Config] = None,
+    llm_params: Optional[LLMParams] = None,
+    history_manager: Optional[HistoryManagerITF] = None,
+    tool_manager: Optional[ToolManagerITF] = None,
+    tools: Optional[List[FunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
+) -> Agent:
     """
     Factory function to create an instance of JAImsAgent using Mistral as the underlying model.
 
     Args:
-        model (str): The name or identifier of the OpenAI model to use.
-        api_key (Optional[str]): The API key for accessing the OpenAI service. Defaults to None.
-        options (Optional[JAImsOptions]): Additional options for configuring the JAImsAgent. Defaults to None.
-        config (Optional[JAImsLLMConfig]): Configuration options specific to the OpenAI language model. Defaults to None.
-        history_manager (Optional[JAImsHistoryManager]): The history manager to use for managing conversation history. Defaults to None.
-        tool_manager (Optional[JAImsToolManager]): The tool manager to use for managing JAImsFunctionTools. Defaults to None.
-        tools (Optional[List[JAImsFunctionTool]]): The list of JAImsFunctionTools to use. Defaults to None.
+        model (str): The name or identifier of the Mistral model to use.
+        api_key (Optional[str]): The API key for accessing the Mistral service. Defaults to None.
+        config (Optional[Config]): Additional options for configuring the JAIms Agent. Defaults to None.
+        llm_params (Optional[LLMParams]): Parameters for the language model. Defaults to None.
+        history_manager (Optional[HistoryManagerITF]): The history manager to use for managing conversation history. Defaults to None.
+        tool_manager (Optional[ToolManagerITF]): The tool manager to use for managing Function Calls. Defaults to None.
+        tools (Optional[List[FunctionTool]]): The list of Function Tools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): The list of tool constraints to use. Defaults to None.
 
     Returns:
-        JAImsAgent: An instance of JAImsAgent configured with the OpenAI model.
+        Agent: An instance of JAIms Agent configured with the Mistral model.
 
     """
-    from .adapters.mistral_adapter import create_jaims_mistral
-    from .adapters.mistral_adapter import JAImsMistralKWArgs
+    from .adapters.mistral_adapter import MistralParams, MistralAdapter
 
-    config = config or JAImsLLMConfig()
-    options = options or JAImsOptions()
+    llm_params = llm_params or LLMParams()
+    config = config or Config()
     tool_choice = None
 
-    kwargs = JAImsMistralKWArgs().copy_with_overrides(
+    kwargs = MistralParams().copy_with_overrides(
         model=model,
-        temperature=config.temperature,
-        max_tokens=config.max_tokens,
-        response_format=config.response_format,
+        temperature=llm_params.temperature,
+        max_tokens=llm_params.max_tokens,
+        response_format=llm_params.response_format,
         tool_choice=tool_choice,
     )
 
-    return create_jaims_mistral(
+    adapter = MistralAdapter(
         api_key=api_key,
-        options=options,
+        options=config,
         kwargs=kwargs,
+    )
+
+    agent = Agent(
+        llm_interface=adapter,
         history_manager=history_manager,
         tool_manager=tool_manager,
         tools=tools,
+        tool_constraints=tool_constraints,
     )
+
+    return agent
+
+
+def anthropic_factory(
+    model: str,
+    api_key: Optional[str] = None,
+    provider: Literal[
+        "anthropic",
+        "vertex",
+    ] = "anthropic",
+    config: Optional[Config] = None,
+    llm_params: Optional[LLMParams] = None,
+    history_manager: Optional[HistoryManagerITF] = None,
+    tool_manager: Optional[ToolManagerITF] = None,
+    tools: Optional[List[FunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
+) -> Agent:
+    """
+    Factory function to create an instance of JAImsAgent using Anthropic as the underlying model.
+
+    Args:
+        model (str): The name or identifier of the Anthropic model to use.
+        api_key (Optional[str]): The API key for accessing the Anthropic service. Defaults to None.
+        provider (Literal["anthropic", "vertex"]): The provider of the Anthropic model. Defaults to "anthropic".
+        config (Optional[Config]): Additional options for configuring the JAIms Agent. Defaults to None.
+        llm_params (Optional[LLMParams]): Parameters for the language model. Defaults to None.
+        history_manager (Optional[HistoryManagerITF]): The history manager to use for managing conversation history. Defaults to None.
+        tool_manager (Optional[ToolManagerITF]): The tool manager to use for managing Function Calls. Defaults to None.
+        tools (Optional[List[FunctionTool]]): The list of Function Tools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): The list of tool constraints to use. Defaults to None.
+
+    Returns:
+        Agent: An instance of JAIms Agent configured with the Anthropic model.
+    """
+    from .adapters.anthropic_adapter import AnthropicParams, AnthropicAdapter
+
+    llm_params = llm_params or LLMParams()
+    config = config or Config()
+
+    kwargs = AnthropicParams().copy_with_overrides(
+        model=model,
+        temperature=llm_params.temperature,
+        max_tokens=llm_params.max_tokens,
+    )
+
+    adapter = AnthropicAdapter(
+        api_key=api_key,
+        provider=provider,
+        config=config,
+        params=kwargs,
+    )
+
+    agent = Agent(
+        llm_interface=adapter,
+        history_manager=history_manager,
+        tool_manager=tool_manager,
+        tools=tools,
+        tool_constraints=tool_constraints,
+    )
+
+    return agent
+
+
+def vertex_ai_factory(
+    model: str,
+    api_key: Optional[str] = None,
+    config: Optional[Config] = None,
+    llm_params: Optional[LLMParams] = None,
+    history_manager: Optional[HistoryManagerITF] = None,
+    tool_manager: Optional[ToolManagerITF] = None,
+    tools: Optional[List[FunctionTool]] = None,
+    tool_constraints: Optional[List[str]] = None,
+) -> Agent:
+    """
+    Factory function to create an instance of JAImsAgent using Vertex AI as the underlying model.
+
+    Args:
+        model (str): The name or identifier of the Vertex AI model to use.
+        api_key (Optional[str]): The API key for accessing the Vertex AI service. Defaults to None.
+        config (Optional[Config]): Additional options for configuring the JAIms Agent. Defaults to None.
+        llm_params (Optional[LLMParams]): Parameters for the language model. Defaults to None.
+        history_manager (Optional[HistoryManagerITF]): The history manager to use for managing conversation history. Defaults to None.
+        tool_manager (Optional[ToolManagerITF]): The tool manager to use for managing Function Calls. Defaults to None.
+        tools (Optional[List[FunctionTool]]): The list of Function Tools to use. Defaults to None.
+        tool_constraints (Optional[List[str]]): The list of tool constraints to use. Defaults to None.
+
+    Returns:
+        Agent: An instance of JAIms Agent configured with the Vertex AI model.
+    """
+
+    from .adapters.vertexai_adapter import VertexAIAdapter
+    from vertexai.generative_models import GenerationConfig
+
+    if not config:
+        raise ValueError("pass project_id and location in options")
+
+    if config.platform_specific_options["project_id"] is None:
+        raise ValueError("project_id is required in options")
+
+    if config.platform_specific_options["location"] is None:
+        raise ValueError("location is required in options")
+
+    project_id = config.platform_specific_options["project_id"]
+    location = config.platform_specific_options["location"]
+
+    llm_params = llm_params or LLMParams()
+
+    generation_config = GenerationConfig(
+        temperature=llm_params.temperature,
+        max_output_tokens=llm_params.max_tokens,
+        response_schema=llm_params.response_format,
+    )
+
+    adapter = VertexAIAdapter(
+        project_id=project_id,
+        location=location,
+        model_name=model,
+        generation_config=generation_config,
+        config=config,
+    )
+
+    agent = Agent(
+        llm_interface=adapter,
+        history_manager=history_manager,
+        tool_manager=tool_manager,
+        tools=tools,
+        tool_constraints=tool_constraints,
+    )
+
+    return agent

@@ -2,11 +2,13 @@ import json
 from jaims import (
     BaseModel,
     Field,
-    JAImsFunctionToolDescriptor,
-    JAImsAgent,
-    JAImsMessage,
+    FunctionToolDescriptor,
+    Agent,
+    Message,
 )
 from typing import List, Optional
+
+from jaims.entities import Config
 
 
 class PersonRecord(BaseModel):
@@ -26,7 +28,7 @@ class PeopleExtraction(BaseModel):
     )
 
 
-extract_people = JAImsFunctionToolDescriptor(
+extract_people = FunctionToolDescriptor(
     name="extract_people",
     description="use this tool to extract people records from the database",
     params=PeopleExtraction,
@@ -41,23 +43,35 @@ In the quaint village of Maplewood, four friends often gathered at the old town 
 if __name__ == "__main__":
 
     # run tool on agent instance
-    agent = JAImsAgent.build(
-        model="gpt-4-turbo",
-        provider="openai",
+    model = "claude-3-5-sonnet@20240620"
+    provider = "vertex"
+
+    agent = Agent.build(
+        model=model,
+        provider=provider,
+        config=Config(
+            platform_specific_options={
+                "project_id": "your-project-id",
+                "region": "europe-west1",
+            }
+        ),
     )
 
     people = agent.run_tool(
-        extract_people, messages=[JAImsMessage.user_message(unstructured_text)]
+        extract_people,
+        messages=[
+            Message.user_message(unstructured_text),
+        ],
     )
 
     print(json.dumps(people.model_dump(), indent=4))
 
     # run tool on class
-    people = JAImsAgent.run_tool_model(
+    people = Agent.run_tool_model(
         model="gpt-4-turbo",
         provider="openai",
         descriptor=extract_people,
-        messages=[JAImsMessage.user_message(unstructured_text)],
+        messages=[Message.user_message(unstructured_text)],
     )
 
     print(json.dumps(people.model_dump(), indent=4))

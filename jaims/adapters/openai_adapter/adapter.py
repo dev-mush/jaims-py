@@ -1,5 +1,4 @@
 from __future__ import annotations
-from abc import ABC, abstractmethod
 import json
 from math import ceil
 from typing import Generator, Union
@@ -13,18 +12,18 @@ from typing import List, Optional, Dict, Literal
 from PIL import Image
 
 from ...interfaces import (
-    JAImsLLMInterface,
-    JAImsHistoryOptimizer,
+    LLMAdapterITF,
+    HistoryOptimizerITF,
 )
 from ...entities import (
-    JAImsImageContent,
-    JAImsContentType,
-    JAImsMessage,
-    JAImsStreamingMessage,
-    JAImsToolCall,
-    JAImsFunctionTool,
-    JAImsMessageRole,
-    JAImsOptions,
+    ImageContent,
+    ContentType,
+    Message,
+    StreamingMessage,
+    ToolCall,
+    FunctionTool,
+    MessageRole,
+    Config,
 )
 from ..shared.image_utilities import image_to_b64
 from ..shared.exponential_backoff_operation import (
@@ -40,33 +39,33 @@ from copy import deepcopy
 # ---------------------
 
 
-class JAImsOpenaiKWArgs:
+class OpenAIParams:
     """
     Represents the keyword arguments for the JAIms OpenAI wrapper.
     This class entirely mirrors the openai API parameters, so refer to it for documentation.
     (https://platform.openai.com/docs/api-reference/chat/create).
 
     Args:
-        model (str, optional): The OpenAI model to use. Defaults to gpt-3.5-turbo.
-        messages (List[dict], optional): The list of messages for the chat completion. Defaults to an empty list, it is automatically populated by the run method so it is not necessary to pass them. If passed, they will always be appended to the messages passed in the run method.
-        max_tokens (int, optional): The maximum number of tokens in the generated response. Defaults to 500.
-        stream (bool, optional): Whether to use streaming for the API call. Defaults to False.
-        temperature (float, optional): The temperature for generating creative text. Defaults to 0.0.
-        top_p (Optional[int], optional): The top-p value for nucleus sampling. Defaults to None.
-        n (int, optional): The number of responses to generate. Defaults to 1.
-        seed (Optional[int], optional): The seed to be passed to openai to have more consistent outputs. Defaults to None.
-        frequency_penalty (float, optional): The frequency penalty for avoiding repetitive responses. Defaults to 0.0.
-        presence_penalty (float, optional): The presence penalty for encouraging diverse responses. Defaults to 0.0.
-        logit_bias (Optional[Dict[str, float]], optional): The logit bias for influencing the model's output. Defaults to None.
-        response_format (Optional[Dict], optional): The format for the generated response. Defaults to None.
-        stop (Union[Optional[str], Optional[List[str]]], optional): The stop condition for the generated response. Defaults to None.
-        tool_choice (Union[str, Dict], optional): The choice of tool to use. Defaults to "auto".
-        tools (Optional[List[JAImsFunctionToolWrapper]], optional): The list of function tool wrappers to use. Defaults to None.
+        model (str, optional): The ID of the model to use. Defaults to "gpt-4o".
+        messages (List[dict], optional): A list of messages. Defaults to [].
+        max_tokens (int, optional): The maximum number of tokens allowed. Defaults to 1024.
+        stream (bool, optional): Whether to stream the response. Defaults to False.
+        temperature (float, optional): What sampling temperature to use. Defaults to 0.0.
+        top_p (Optional[int], optional): The nucleus sampling probability. Defaults to None.
+        n (int, optional): How many completions to generate. Defaults to 1. (Currently only 1 is supported in JAIms).
+        seed (Optional[int], optional): The seed to use for the model. Defaults to None.
+        frequency_penalty (float, optional): How much to penalize new tokens based on their frequency in the text so far. Defaults to 0.0.
+        presence_penalty (float, optional): How much to penalize new tokens based on whether they appear in the text so far. Defaults to 0.0.
+        logit_bias (Optional[Dict[str, float]], optional): A map of tokens to their logit bias values. Defaults to None.
+        response_format (Optional[Dict], optional): The format of the response. Defaults to None.
+        stop (Union[Optional[str], Optional[List[str]]], optional): One or more sequences where the API will stop generating tokens. Defaults to None.
+        tool_choice (Optional[Union[str, Dict]], optional): The tool choice. Defaults to None.
+        tools (Optional[List[Dict]], optional): The tools json schema. Defaults to None.
     """
 
     def __init__(
         self,
-        model: str = "gpt-3.5-turbo",
+        model: str = "gpt-4o",
         messages: List[dict] = [],
         max_tokens: int = 1024,
         stream: bool = False,
@@ -79,7 +78,7 @@ class JAImsOpenaiKWArgs:
         logit_bias: Optional[Dict[str, float]] = None,
         response_format: Optional[Dict] = None,
         stop: Union[Optional[str], Optional[List[str]]] = None,
-        tool_choice: Union[str, Dict] = "auto",
+        tool_choice: Optional[Union[str, Dict]] = None,
         tools: Optional[List[Dict]] = None,
     ):
         self.model = model
@@ -99,6 +98,13 @@ class JAImsOpenaiKWArgs:
         self.tools = tools
 
     def to_dict(self):
+        """
+        Returns the llm parameters as a dictionary, removing None values.
+
+        Returns:
+            dict: The llm parameters as a dictionary.
+        """
+
         kwargs = {
             "model": self.model,
             "temperature": self.temperature,
@@ -122,23 +128,32 @@ class JAImsOpenaiKWArgs:
         return kwargs
 
     @staticmethod
-    def from_dict(kwargs: dict) -> JAImsOpenaiKWArgs:
-        return JAImsOpenaiKWArgs(
-            model=kwargs.get("model", "gpt-3.5-turbo"),
-            messages=kwargs.get("messages", []),
-            max_tokens=kwargs.get("max_tokens", 1024),
-            stream=kwargs.get("stream", False),
-            temperature=kwargs.get("temperature", 0.0),
-            top_p=kwargs.get("top_p", None),
-            n=kwargs.get("n", 1),
-            seed=kwargs.get("seed", None),
-            frequency_penalty=kwargs.get("frequency_penalty", 0.0),
-            presence_penalty=kwargs.get("presence_penalty", 0.0),
-            logit_bias=kwargs.get("logit_bias", None),
-            response_format=kwargs.get("response_format", None),
-            stop=kwargs.get("stop", None),
-            tool_choice=kwargs.get("tool_choice", "auto"),
-            tools=kwargs.get("tools", None),
+    def from_dict(raw_dictionary: dict) -> OpenAIParams:
+        """
+        Returns a new OpenAIParams instance from a dictionary.
+
+        Args:
+            kwargs (dict): The dictionary containing the parameters.
+
+        Returns:
+            OpenAIParams: The OpenAIParams instance.
+        """
+        return OpenAIParams(
+            model=raw_dictionary.get("model", "gpt-4o"),
+            messages=raw_dictionary.get("messages", []),
+            max_tokens=raw_dictionary.get("max_tokens", 1024),
+            stream=raw_dictionary.get("stream", False),
+            temperature=raw_dictionary.get("temperature", 0.0),
+            top_p=raw_dictionary.get("top_p", None),
+            n=raw_dictionary.get("n", 1),
+            seed=raw_dictionary.get("seed", None),
+            frequency_penalty=raw_dictionary.get("frequency_penalty", 0.0),
+            presence_penalty=raw_dictionary.get("presence_penalty", 0.0),
+            logit_bias=raw_dictionary.get("logit_bias", None),
+            response_format=raw_dictionary.get("response_format", None),
+            stop=raw_dictionary.get("stop", None),
+            tool_choice=raw_dictionary.get("tool_choice", None),
+            tools=raw_dictionary.get("tools", None),
         )
 
     def copy_with_overrides(
@@ -158,11 +173,31 @@ class JAImsOpenaiKWArgs:
         stop: Optional[Union[str, List[str]]] = None,
         tool_choice: Optional[Union[str, Dict]] = None,
         tools: Optional[List[Dict]] = None,
-    ) -> JAImsOpenaiKWArgs:
+    ) -> OpenAIParams:
         """
-        Returns a new JAImsOpenaiKWArgs instance with the passed kwargs overridden.
+        Returns a new OpenAIParams instance with the provided parameters overridden. Pass only the parameters you want to override.
+
+        Args:
+            model (Optional[str], optional): The ID of the model to use. Defaults to None.
+            messages (Optional[List[dict]], optional): A list of messages. Defaults to None.
+            max_tokens (Optional[int], optional): The maximum number of tokens allowed. Defaults to None.
+            stream (Optional[bool], optional): Whether to stream the response. Defaults to None.
+            temperature (Optional[float], optional): What sampling temperature to use. Defaults to None.
+            top_p (Optional[int], optional): The nucleus sampling probability. Defaults to None.
+            n (Optional[int], optional): How many completions to generate. Defaults to None.
+            seed (Optional[int], optional): The seed to use for the model. Defaults to None.
+            frequency_penalty (Optional[float], optional): How much to penalize new tokens based on their frequency in the text so far. Defaults to None.
+            presence_penalty (Optional[float], optional): How much to penalize new tokens based on whether they appear in the text so far. Defaults to None.
+            logit_bias (Optional[Dict[str, float]], optional): A map of tokens to their logit bias values. Defaults to None.
+            response_format (Optional[Dict], optional): The format of the response. Defaults to None.
+            stop (Optional[Union[str, List[str]], optional): One or more sequences where the API will stop generating tokens. Defaults to None.
+            tool_choice (Optional[Union[str, Dict]], optional): The tool choice. Defaults to None.
+            tools (Optional[List[Dict]], optional): The tools json schema. Defaults to None.
+
+        Returns:
+            OpenAIParams: The new OpenAIParams instance with the provided parameters overridden.
         """
-        return JAImsOpenaiKWArgs(
+        return OpenAIParams(
             model=model if model else self.model,
             messages=messages if messages else self.messages,
             max_tokens=max_tokens if max_tokens else self.max_tokens,
@@ -187,18 +222,27 @@ class JAImsOpenaiKWArgs:
         )
 
 
-class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
+class OpenAITokenHistoryOptimizer(HistoryOptimizerITF):
     def __init__(
         self,
-        options: JAImsOptions,
+        config: Config,
         history_max_tokens: int,
         model: str,
     ):
-        self.options = options
+        self.config = config
         self.history_max_tokens = history_max_tokens
         self.model = model
 
-    def optimize_history(self, messages: List[JAImsMessage]) -> List:
+    def optimize_history(self, messages: List[Message]) -> List[Message]:
+        """
+        Optimizes the chat history by removing the oldest messages until the total number of tokens is less than or equal to the maximum allowed tokens.
+
+        Args:
+            messages (List[Message]): The chat history between the user and agent.
+
+        Returns:
+            List: The optimized chat history.
+        """
 
         # Copying the whole history to avoid altering the original one
         buffer = messages.copy()
@@ -232,7 +276,7 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
         total = 85 + 170 * n
         return total
 
-    def __tokens_from_messages(self, messages: List[JAImsMessage], model):
+    def __tokens_from_messages(self, messages: List[Message], model):
         """Returns the number of tokens used by a list of messages."""
 
         images = []
@@ -251,8 +295,13 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
                 for tool_call in message.tool_calls:
                     parsed.append(tool_call.tool_name + json.dumps(tool_call.tool_args))
 
-            if message.tool_response:
-                parsed.append(message.tool_response.response)
+            if message.tool_responses:
+                for tool_response in message.tool_responses:
+                    parsed.append(
+                        tool_response.tool_name
+                        + tool_response.tool_call_id
+                        + json.dumps(tool_response.response),
+                    )
 
         image_tokens = 0
         for image in images:
@@ -262,45 +311,39 @@ class JAImsTokenHistoryOptimizer(JAImsHistoryOptimizer):
         return self.__estimate_token_count(json.dumps(parsed), model) + image_tokens
 
 
-class OpenAITransactionStorageInterface(ABC):
+class OpenaiAdapter(LLMAdapterITF):
     """
-    Interface for storing LLM transactions.
-    Override this class to implement your own storage, to store a pair of LLM request and response payloads.
-    """
+    OpenAI adapter for JAIms.
 
-    @abstractmethod
-    def store_transaction(self, request: dict, response: dict):
-        pass
-
-
-class JAImsOpenaiAdapter(JAImsLLMInterface):
-    """
-    The JAIms OpenAI adapter.
+    Args:
+        api_key (Optional[str], optional): The OpenAI API key. Defaults to None.
+        options (Optional[Config], optional): The configuration options for the adapter. Defaults to None.
+        kwargs (Optional[Union[OpenAIParams, Dict]], optional): The keyword arguments for the OpenAI API. Defaults to None.
+        existing_params_messages_behaviour (Literal["append", "replace"], optional): The behavior for the messages in the kwargs when receiving new messages on calls. Defaults to "append", which appends new messages to the params passed in the constructor.
+        existing_tools_behaviour (Literal["append", "replace"], optional): The behavior for the tools in the kwargs when receiving new tools on calls. Defaults to "append", which appends new tools to the params passed in the constructor.
     """
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        options: Optional[JAImsOptions] = None,
-        kwargs: Optional[Union[JAImsOpenaiKWArgs, Dict]] = None,
-        kwargs_messages_behavior: Literal["append", "replace"] = "append",
-        kwargs_tools_behavior: Literal["append", "replace"] = "append",
-        transaction_storage: Optional[OpenAITransactionStorageInterface] = None,
+        options: Optional[Config] = None,
+        kwargs: Optional[Union[OpenAIParams, Dict]] = None,
+        existing_params_messages_behaviour: Literal["append", "replace"] = "append",
+        existing_tools_behaviour: Literal["append", "replace"] = "append",
     ):
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise Exception("OpenAI API key not provided.")
 
-        self.options = options or JAImsOptions()
-        self.kwargs = kwargs or JAImsOpenaiKWArgs()
-        self.kwargs_messages_behavior = kwargs_messages_behavior
-        self.kwargs_tools_behavior = kwargs_tools_behavior
-        self.transaction_storage = transaction_storage
+        self.options = options or Config()
+        self.kwargs = kwargs or OpenAIParams()
+        self.existing_params_messages_behaviour = existing_params_messages_behaviour
+        self.existing_tools_behaviour = existing_tools_behaviour
 
     def __get_args(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
         stream: bool = False,
     ):
@@ -310,7 +353,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 "Only one tool choice is allowed when using the OpenAI API."
             )
 
-        if isinstance(self.kwargs, JAImsOpenaiKWArgs):
+        if isinstance(self.kwargs, OpenAIParams):
             args = self.kwargs.to_dict()
         else:
             args = deepcopy(self.kwargs)
@@ -318,7 +361,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         # handle messages
 
         openai_messages = self.__jaims_messages_to_openai(messages or [])
-        if self.kwargs_messages_behavior == "append":
+        if self.existing_params_messages_behaviour == "append":
             kwargs_messages = args.get("messages", [])
             openai_messages = kwargs_messages + openai_messages
 
@@ -328,21 +371,21 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
         # handle tools
 
         openai_tools = self.__jaims_tools_to_openai(tools or [])
-        if self.kwargs_tools_behavior == "append":
-            openai_tools = args.get("tools", []) + openai_tools
-
-        tool_choice = "auto"
-        if tool_constraints:
-            tool_choice = {
-                "type": "function",
-                "function": {
-                    "name": tool_constraints[0],
-                },
-            }
-        elif args.get("tool_choice", None):
-            tool_choice = args["tool_choice"]
-
         if len(openai_tools) > 0:
+            if self.existing_tools_behaviour == "append":
+                openai_tools = args.get("tools", []) + openai_tools
+
+            tool_choice = "auto"
+            if tool_constraints:
+                tool_choice = {
+                    "type": "function",
+                    "function": {
+                        "name": tool_constraints[0],
+                    },
+                }
+            elif args.get("tool_choice", None):
+                tool_choice = args["tool_choice"]
+
             args["tools"] = openai_tools
             args["tool_choice"] = tool_choice
 
@@ -350,27 +393,22 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def call(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> JAImsMessage:
+    ) -> Message:
         args = self.__get_args(messages, tools, tool_constraints)
         response = self.___get_openai_response(args, self.options)
         assert isinstance(response, ChatCompletion)
-        if self.transaction_storage:
-            self.transaction_storage.store_transaction(
-                request=args,
-                response=response.model_dump(exclude_none=True),
-            )
 
         return self.__openai_chat_completion_to_jaims_message(response)
 
     def call_streaming(
         self,
-        messages: Optional[List[JAImsMessage]] = None,
-        tools: Optional[List[JAImsFunctionTool]] = None,
+        messages: Optional[List[Message]] = None,
+        tools: Optional[List[FunctionTool]] = None,
         tool_constraints: Optional[List[str]] = None,
-    ) -> Generator[JAImsStreamingMessage, None, None]:
+    ) -> Generator[StreamingMessage, None, None]:
         args = self.__get_args(
             messages, tools, stream=True, tool_constraints=tool_constraints
         )
@@ -386,15 +424,9 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 accumulated_delta, completion_chunk
             )
 
-        if self.transaction_storage and accumulated_delta:
-            self.transaction_storage.store_transaction(
-                request=args,
-                response=accumulated_delta.model_dump(exclude_none=True),
-            )
+    def __jaims_messages_to_openai(self, messages: List[Message]) -> List[dict]:
 
-    def __jaims_messages_to_openai(self, messages: List[JAImsMessage]) -> List[dict]:
-
-        def format_contents(contents: List[JAImsContentType]):
+        def format_contents(contents: List[ContentType]):
             if len(contents) == 1 and isinstance(contents[0], str):
                 return contents[0]
             else:
@@ -402,7 +434,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 for c in contents:
                     if isinstance(c, str):
                         raw_contents.append({"type": "text", "text": c})
-                    elif isinstance(c, JAImsImageContent):
+                    elif isinstance(c, ImageContent):
                         url = c.image
                         if isinstance(c.image, Image.Image):
                             mime, b64 = image_to_b64(c.image)
@@ -420,7 +452,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
                 return raw_contents
 
-        def format_tool_calls(tool_calls: List[JAImsToolCall]):
+        def format_tool_calls(tool_calls: List[ToolCall]):
             raw_tool_calls = []
             for tc in tool_calls:
                 raw_tool_call = {
@@ -436,15 +468,16 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         raw_messages = []
         for m in messages:
-            if m.tool_response:
-                raw_messages.append(
-                    {
-                        "role": "tool",
-                        "name": m.tool_response.tool_name,
-                        "tool_call_id": m.tool_response.tool_call_id,
-                        "content": json.dumps(m.tool_response.response),
-                    }
-                )
+            if m.tool_responses:
+                for tr in m.tool_responses:
+                    raw_messages.append(
+                        {
+                            "role": "tool",
+                            "name": tr.tool_name,
+                            "tool_call_id": tr.tool_call_id,
+                            "content": json.dumps(tr.response),
+                        }
+                    )
                 continue
 
             if m.tool_calls:
@@ -466,7 +499,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
         return raw_messages
 
-    def __jaims_tools_to_openai(self, tools: List[JAImsFunctionTool]) -> List[dict]:
+    def __jaims_tools_to_openai(self, tools: List[FunctionTool]) -> List[dict]:
         raw_tools = []
         for t in tools:
             tool_raw_dict = {
@@ -483,16 +516,16 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def __openai_chat_completion_to_jaims_message(
         self, completion: ChatCompletion
-    ) -> JAImsMessage:
+    ) -> Message:
         if len(completion.choices) == 0:
             raise Exception("OpenAI returned an empty response.")
 
         message = completion.choices[0].message
-        role = JAImsMessageRole(message.role)
+        role = MessageRole(message.role)
         tool_calls = None
         if message.tool_calls:
             tool_calls = [
-                JAImsToolCall(
+                ToolCall(
                     id=tc.id,
                     tool_name=tc.function.name,
                     tool_args=json.loads(tc.function.arguments),
@@ -500,7 +533,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                 for tc in message.tool_calls
             ]
 
-        return JAImsMessage(
+        return Message(
             role=role,
             contents=[message.content] if message.content else None,
             tool_calls=tool_calls,
@@ -509,19 +542,19 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
 
     def __openai_chat_completion_choice_delta_to_jaims_message(
         self, accumulated_choice_delta: ChoiceDelta, current_chunk: ChatCompletionChunk
-    ) -> JAImsStreamingMessage:
+    ) -> StreamingMessage:
 
         current_choice = current_chunk.choices[0]
         role = (
-            JAImsMessageRole(current_choice.delta.role)
+            MessageRole(current_choice.delta.role)
             if current_choice.delta.role
             else accumulated_choice_delta.role
         )
         textDelta = current_choice.delta.content
-        contents: Optional[List[JAImsContentType]] = None
+        contents: Optional[List[ContentType]] = None
         function_tool_calls = None
 
-        role = JAImsMessageRole(accumulated_choice_delta.role)
+        role = MessageRole(accumulated_choice_delta.role)
         if accumulated_choice_delta.content:
             contents = [
                 accumulated_choice_delta.content,
@@ -532,7 +565,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
             for tc in accumulated_choice_delta.tool_calls:
                 if tc.function:
                     function_tool_calls.append(
-                        JAImsToolCall(
+                        ToolCall(
                             id=tc.id or "",
                             tool_name=tc.function.name or "",
                             tool_args=(
@@ -543,8 +576,8 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
                         )
                     )
 
-        return JAImsStreamingMessage(
-            message=JAImsMessage(
+        return StreamingMessage(
+            message=Message(
                 role=role,
                 contents=contents,
                 tool_calls=function_tool_calls,
@@ -556,7 +589,7 @@ class JAImsOpenaiAdapter(JAImsLLMInterface):
     def ___get_openai_response(
         self,
         openai_kw_args: dict,
-        call_options: JAImsOptions,
+        call_options: Config,
     ) -> Union[ChatCompletion, Stream[ChatCompletionChunk]]:
 
         def handle_openai_error(error) -> ErrorHandlingMethod:

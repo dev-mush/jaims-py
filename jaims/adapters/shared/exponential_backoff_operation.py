@@ -1,7 +1,7 @@
 from enum import Enum
 import random
 from typing import Any, Callable
-from ...entities import JAImsOptions, JAImsMaxRetriesExceeded
+from ...entities import Config, MaxRetriesExceeded
 import time
 import logging
 
@@ -15,7 +15,7 @@ class ErrorHandlingMethod(Enum):
 def call_with_exponential_backoff(
     operation: Callable[[], Any],
     error_handler: Callable[[Exception], ErrorHandlingMethod],
-    options: JAImsOptions,
+    options: Config,
 ) -> Any:
     retries = 0
     sleep_time = options.retry_delay
@@ -57,4 +57,4 @@ def call_with_exponential_backoff(
             time.sleep(sleep_time)
 
     logger.error(f"Max retries exceeded! Operation failed {options.max_retries} times.")
-    raise JAImsMaxRetriesExceeded(options.max_retries, last_exception)
+    raise MaxRetriesExceeded(options.max_retries, last_exception)
