@@ -373,7 +373,7 @@ class AnthropicAdapter(LLMAdapterITF):
             claude_tool = {
                 "name": t.descriptor.name,
                 "description": t.descriptor.description,
-                "input_schema": t.descriptor.json_schema(),
+                "input_schema": t.descriptor.get_json_schema(),
             }
             claude_tools.append(claude_tool)
         return claude_tools

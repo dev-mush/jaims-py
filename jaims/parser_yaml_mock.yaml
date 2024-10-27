@@ -1,0 +1,26 @@
+model: "gpt-4o"
+provider: "openai"
+llm_params:
+  temperature: 0.7
+  max_tokens: 4000
+  response_format:
+    some: "value"
+config:
+  max_retries: 15
+  retry_delay: 10
+  exponential_base: 2
+  exponential_delay: 1
+  exponential_cap: null
+  jitter: true
+  platform_specific_options: 
+    some: "value"
+messages:
+  - role: "user"
+    contents:
+      - "Hello, I'm Jacob"
+      - "What's your name?"
+    name: "Jacob"
+  - role: "assistant"
+    contents:
+      - "Hello Jacob, I'm Jaims"
+      - "How can I help you today?"

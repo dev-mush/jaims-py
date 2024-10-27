@@ -110,7 +110,7 @@ class GoogleGenerativeAIAdapter(LLMAdapterITF):
                 content_types.FunctionDeclaration(
                     name=jaims_tool.descriptor.name,
                     description=jaims_tool.descriptor.description,
-                    parameters=jaims_tool.descriptor.json_schema(
+                    parameters=jaims_tool.descriptor.get_json_schema(
                         remove_any_of=True,
                         dereference=True,
                         remove_all_of=True,

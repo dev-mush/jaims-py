@@ -507,7 +507,7 @@ class OpenaiAdapter(LLMAdapterITF):
                 "function": {
                     "name": t.descriptor.name,
                     "description": t.descriptor.description,
-                    "parameters": t.descriptor.json_schema(),
+                    "parameters": t.descriptor.get_json_schema(),
                 },
             }
             raw_tools.append(tool_raw_dict)

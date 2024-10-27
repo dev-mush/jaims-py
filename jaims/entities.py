@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import (
     Any,
     Callable,
@@ -23,7 +23,7 @@ import jsonref
 # -------------------------
 
 
-class ToolCall:
+class ToolCall(BaseModel):
     """
     Models a tool call requrested by an LLM.
 
@@ -35,10 +35,9 @@ class ToolCall:
         tool_args (Optional[Dict[str, Any]]): The arguments for the tool call.
     """
 
-    def __init__(self, id: str, tool_name: str, tool_args: Optional[Dict[str, Any]]):
-        self.id = id
-        self.tool_name = tool_name
-        self.tool_args = tool_args
+    id: str
+    tool_name: str
+    tool_args: Optional[Dict[str, Any]] = None
 
 
 @deprecated("use ToolCall instead.")
@@ -46,7 +45,7 @@ class JAImsToolCall(ToolCall):
     pass
 
 
-class ToolResponse:
+class ToolResponse(BaseModel):
     """
     Models a response from a ToolCall.
 
@@ -59,13 +58,10 @@ class ToolResponse:
         is_error (bool): Whether the response is an error.
     """
 
-    def __init__(
-        self, tool_call_id: str, tool_name: str, response: Any, is_error: bool = False
-    ):
-        self.tool_call_id = tool_call_id
-        self.tool_name = tool_name
-        self.response = response
-        self.is_error = is_error
+    tool_call_id: str
+    tool_name: str
+    response: Any
+    is_error: bool = False
 
 
 @deprecated("use ToolResponse instead.")
@@ -76,7 +72,7 @@ class JAImsToolResponse(ToolResponse):
 ImageContentType = Union[str, Image.Image]
 
 
-class ImageContent:
+class ImageContent(BaseModel):
     """
     Models an image content for a message that contains an image.
 
@@ -93,7 +89,7 @@ class ImageContent:
 ContentType = Union[ImageContent, str]
 
 
-class MessageRole(Enum):
+class MessageRole(StrEnum):
     """
     Represents the roles of a Message sent and received by an LLM.
 
@@ -115,7 +111,7 @@ class MessageRole(Enum):
     SYSTEM = "system"
 
 
-class Message:
+class Message(BaseModel):
     """
     Represents a message to be sent to or received from an LLM.
 
@@ -133,21 +129,12 @@ class Message:
         raw (Optional[Any]): The raw data associated with the message.
     """
 
-    def __init__(
-        self,
-        role: MessageRole,
-        contents: Optional[List[ContentType]] = None,
-        name: Optional[str] = None,
-        tool_calls: Optional[List[ToolCall]] = None,
-        tool_responses: Optional[List[ToolResponse]] = None,
-        raw: Optional[Any] = None,
-    ):
-        self.role = role
-        self.contents = contents
-        self.name = name
-        self.tool_calls = tool_calls
-        self.tool_responses = tool_responses
-        self.raw = raw
+    role: MessageRole
+    contents: Optional[List[ContentType]] = None
+    name: Optional[str] = None
+    tool_calls: Optional[List[ToolCall]] = None
+    tool_responses: Optional[List[ToolResponse]] = None
+    raw: Optional[Any] = None
 
     def get_text(self) -> Optional[str]:
         """
@@ -178,6 +165,7 @@ class Message:
     @staticmethod
     def user_message(
         text: str,
+        name: Optional[str] = None,
         raw: Optional[Any] = None,
     ) -> Message:
         """
@@ -192,6 +180,7 @@ class Message:
         """
         return Message(
             role=MessageRole.USER,
+            name=name,
             contents=[text],
             raw=raw,
         )
@@ -578,7 +567,7 @@ class JAImsFunctionTool(FunctionTool):
 # -----------------------------------
 
 
-class LLMParams:
+class LLMParams(BaseModel):
     """
     Models common configuration parameters sent to the LLM.
 
@@ -591,15 +580,9 @@ class LLMParams:
         response_format (Optional[Dict[str, Any]], optional): The format of the response. Defaults to None.
     """
 
-    def __init__(
-        self,
-        temperature: float = 0.5,
-        max_tokens: int = 1024,
-        response_format: Optional[Dict[str, Any]] = None,
-    ):
-        self.temperature = temperature
-        self.max_tokens = max_tokens
-        self.response_format = response_format
+    temperature: float = 0.5
+    max_tokens: int = 1024
+    response_format: Optional[Dict[str, Any]] = None
 
 
 @deprecated("use LLMParams instead.")
@@ -607,7 +590,7 @@ class JAImsLLMConfig(LLMParams):
     pass
 
 
-class Config:
+class Config(BaseModel):
     """
     Config options for the Agent class when calling the remote LLM.
 
@@ -625,23 +608,13 @@ class Config:
         platform_specific_options (Optional[Dict[str, Any]]): Platform-specific options to be passed to the client.
     """
 
-    def __init__(
-        self,
-        max_retries=15,
-        retry_delay=10,
-        exponential_base: int = 2,
-        exponential_delay: int = 1,
-        exponential_cap: Optional[int] = None,
-        jitter: bool = True,
-        platform_specific_options: Optional[Dict[str, Any]] = None,
-    ):
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
-        self.exponential_base = exponential_base
-        self.exponential_delay = exponential_delay
-        self.exponential_cap = exponential_cap
-        self.jitter = jitter
-        self.platform_specific_options = platform_specific_options or {}
+    max_retries: int = 15
+    retry_delay: int = 10
+    exponential_base: int = 2
+    exponential_delay: int = 1
+    exponential_cap: Optional[int] = None
+    jitter: bool = True
+    platform_specific_options: Optional[Dict[str, Any]] = {}
 
     def copy_with_overrides(
         self,

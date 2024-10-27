@@ -41,6 +41,9 @@ from .interfaces import (
     LLMAdapterITF,
 )
 
+
+from .parser import JAIMSParser
+
 from pydantic import BaseModel, Field, create_model
 
 
@@ -77,4 +80,5 @@ __all__ = [
     "BaseModel",
     "Field",
     "create_model",
+    "JAIMSParser",
 ]

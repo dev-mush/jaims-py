@@ -103,7 +103,7 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
         def add_numbers(a: int, b: int) -> int:
             return a + b
 
-        output_schema = add_numbers.descriptor.json_schema()
+        output_schema = add_numbers.descriptor.get_json_schema()
 
         self.assertNotIn("return", output_schema["properties"])
 
@@ -117,7 +117,7 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
         def add_numbers(a: int, b: Optional[int] = None) -> int:
             return a + (b or 1)
 
-        output_schema = add_numbers.descriptor.json_schema()
+        output_schema = add_numbers.descriptor.get_json_schema()
 
         self.assertEqual(
             output_schema["properties"]["a"]["description"], "First number"
@@ -132,7 +132,7 @@ class TestJAIMSFunctionToolDecorator(unittest.TestCase):
         def add_numbers(a: int, b: Optional[int] = None, c: int = 4) -> int:
             return a + (b or 1)
 
-        output_schema = add_numbers.descriptor.json_schema()
+        output_schema = add_numbers.descriptor.get_json_schema()
 
         self.assertNotIn("b", output_schema["required"])
         self.assertNotIn("c", output_schema["required"])
