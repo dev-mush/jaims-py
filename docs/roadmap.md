@@ -1,17 +1,13 @@
 # Implementation Roadmap
 
-Here I track the next features and improvements that I plan to implement in the project. Every contribution is welcome.
+Here I keep track of the next features and improvements that I plan to implement in the project. Every contribution is welcome.
 
-## 🔜 Next - High Priority
+- Improved Docs: Setup a Doc Gen framework to publish internal docs trough CI
 
-- Improve Docs
-- Add Logging
-- Add VLLM support
-- Improve Tests
-- Configure CI tests and deployment with Github Actions
+- Improve Tests: Add more unit tests and integration tests for the various components
 
-## 📅 Future - Medium Priority
+- Improvew Logging: Add logging for warnings, errors, debug and info
 
-- Add config from yaml
-- Add config and run from .prompt file
-- Improve image passing: remove simple str, should be either an Image.Image, an url or a b64 with mime
+- Launch from YAML: Implement fast loading and invocation from YAML file
+
+- Implement CLI: Add a CLI interface to invoke tasks from command line.

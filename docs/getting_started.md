@@ -13,13 +13,13 @@ Note: Installing `jaims-py` alone doesn't include the built-in providers (this i
 For example, to install OpenAI support:
 
 ```bash
-pip install jaims-py[openai]
+pip install 'jaims-py[openai]'
 ```
 
 You can install multiple providers at once:
 
 ```bash
-pip install jaims-py[openai,google,mistral,anthropic]
+pip install 'jaims-py[openai,google,mistral,anthropic]'
 ```
 
 ## Basic Usage
